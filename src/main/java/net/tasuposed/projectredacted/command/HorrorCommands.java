@@ -25,6 +25,7 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -101,6 +102,92 @@ public class HorrorCommands {
     // Track debug mode status
     private static boolean debugModeEnabled = false;
     private static boolean isDebugListenerRegistered = false;
+    
+    /**
+     * Create a Void dimension portal at the player's location
+     */
+    private static int createVoidPortal(CommandSourceStack source) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            source.sendFailure(Component.literal("§cThis command must be run by a player"));
+            return 0;
+        }
+        
+        ServerLevel level = player.serverLevel();
+        BlockPos pos = player.blockPosition();
+        
+        // Clear area first to avoid overlaps
+        for (int x = -2; x <= 2; x++) {
+            for (int y = 0; y <= 4; y++) {
+                for (int z = -2; z <= 2; z++) {
+                    level.setBlockAndUpdate(pos.offset(x, y, z), Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+        
+        // Create obsidian platform
+        for (int x = -2; x <= 2; x++) {
+            for (int z = -2; z <= 2; z++) {
+                // Frame blocks
+                if (x == -2 || x == 2 || z == -2 || z == 2) {
+                    // Corner posts
+                    if ((x == -2 || x == 2) && (z == -2 || z == 2)) {
+                        for (int y = 0; y <= 3; y++) {
+                            level.setBlockAndUpdate(pos.offset(x, y, z), Blocks.OBSIDIAN.defaultBlockState());
+                        }
+                    } else {
+                        // Regular frame
+                        level.setBlockAndUpdate(pos.offset(x, 0, z), Blocks.OBSIDIAN.defaultBlockState());
+                        level.setBlockAndUpdate(pos.offset(x, 3, z), Blocks.OBSIDIAN.defaultBlockState());
+                    }
+                } else {
+                    // Floor
+                    level.setBlockAndUpdate(pos.offset(x, 0, z), Blocks.OBSIDIAN.defaultBlockState());
+                }
+            }
+        }
+        
+        // Add crying obsidian as activation blocks
+        level.setBlockAndUpdate(pos.offset(0, 0, 0), Blocks.CRYING_OBSIDIAN.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(1, 0, 0), Blocks.CRYING_OBSIDIAN.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(-1, 0, 0), Blocks.CRYING_OBSIDIAN.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(0, 0, 1), Blocks.CRYING_OBSIDIAN.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(0, 0, -1), Blocks.CRYING_OBSIDIAN.defaultBlockState());
+        
+        // Add some decoration with end rods for light
+        level.setBlockAndUpdate(pos.offset(-2, 4, -2), Blocks.END_ROD.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(2, 4, -2), Blocks.END_ROD.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(-2, 4, 2), Blocks.END_ROD.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(2, 4, 2), Blocks.END_ROD.defaultBlockState());
+        
+        // Add soul fire in the center for effect
+        level.setBlockAndUpdate(pos.offset(0, 1, 0), Blocks.SOUL_FIRE.defaultBlockState());
+        
+        // Create particles for effect
+        for (int i = 0; i < 50; i++) {
+            double offsetX = level.getRandom().nextDouble() * 4.0 - 2.0;
+            double offsetY = level.getRandom().nextDouble() * 3.0;
+            double offsetZ = level.getRandom().nextDouble() * 4.0 - 2.0;
+            
+            level.sendParticles(
+                net.minecraft.core.particles.ParticleTypes.PORTAL,
+                pos.getX() + 0.5 + offsetX,
+                pos.getY() + 1.5 + offsetY,
+                pos.getZ() + 0.5 + offsetZ,
+                1, 0, 0, 0, 0.05
+            );
+        }
+        
+        // Play a sound effect
+        level.playSound(null, pos, 
+            SoundEvents.PORTAL_TRIGGER, 
+            SoundSource.BLOCKS, 
+            1.0F, 1.0F
+        );
+        
+        // No feedback message to maintain ARG experience
+        
+        return 1;
+    }
     
     /**
      * Register all commands
@@ -215,7 +302,12 @@ public class HorrorCommands {
                 .executes(context -> spawnTestStructure(context.getSource(), -1))
                 .then(Commands.argument("type", IntegerArgumentType.integer(0, 39))
                     .executes(context -> spawnTestStructure(context.getSource(), 
-                        IntegerArgumentType.getInteger(context, "type")))));
+                        IntegerArgumentType.getInteger(context, "type")))))
+            .then(Commands.literal("create_portal")
+                .requires(source -> source.hasPermission(2))
+                .executes(context -> createVoidPortal(context.getSource())))
+            .then(Commands.literal("escape_void")
+                .executes(context -> escapeVoidDimension(context.getSource())));
         
         dispatcher.register(rootCommand);
     }
@@ -1002,6 +1094,38 @@ public class HorrorCommands {
             return 1;
         } else {
             source.sendFailure(Component.literal("Failed to spawn Protocol_37 for transformation test"));
+            return 0;
+        }
+    }
+
+    /**
+     * Escape from The Void dimension back to the overworld
+     */
+    private static int escapeVoidDimension(CommandSourceStack source) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            source.sendFailure(Component.literal("§cThis command must be run by a player"));
+            return 0;
+        }
+        
+        try {
+            // Import the VoidPortalHandler class here to call its returnFromVoid method
+            net.tasuposed.projectredacted.world.TheVoidPortalHandler.returnFromVoid(player);
+            // No feedback message to maintain ARG experience
+            return 1;
+        } catch (Exception e) {
+            LOGGER.error("Failed to escape The Void dimension", e);
+            // Only display raw error, no context
+            source.sendFailure(Component.literal("§c" + e.getMessage()));
+            
+            // Fallback escape method - direct to Overworld if portal handler fails
+            ServerLevel overworld = player.server.getLevel(net.minecraft.world.level.Level.OVERWORLD);
+            if (overworld != null) {
+                BlockPos spawnPos = overworld.getSharedSpawnPos();
+                player.changeDimension(overworld);
+                player.teleportTo(spawnPos.getX(), spawnPos.getY(), spawnPos.getZ());
+                return 1;
+            }
+            
             return 0;
         }
     }

@@ -115,8 +115,7 @@ public class TheVoidPortalHandler {
             long currentTime = player.level().getGameTime();
             
             if (currentTime - lastPortalTime < PORTAL_COOLDOWN) {
-                // Still on cooldown
-                player.sendSystemMessage(Component.literal("§8§o§kThe void§r §8§ogets restless..."));
+                // Still on cooldown - no message needed
                 return;
             }
         }
@@ -165,7 +164,7 @@ public class TheVoidPortalHandler {
      * Teleport a player to The Void dimension
      */
     public static void teleportPlayerToVoid(ServerPlayer player, BlockPos sourcePos) {
-        if (player.level().dimension() == DimensionRegistry.THE_VOID) {  // Fixed: THE_VOID to THE_VOID_KEY
+        if (player.level().dimension() == DimensionRegistry.THE_VOID) {
             // Already in The Void, try to return to overworld
             returnFromVoid(player);
             return;
@@ -177,14 +176,13 @@ public class TheVoidPortalHandler {
                 player.position()));
         
         // Get the server and the destination level
-        ServerLevel serverLevel = player.server.getLevel(DimensionRegistry.THE_VOID);  // Fixed: THE_VOID to THE_VOID_KEY
+        ServerLevel serverLevel = player.server.getLevel(DimensionRegistry.THE_VOID);
         
         if (serverLevel != null) {
             // Find a safe destination in The Void
             BlockPos destPos = findSafeDestination(serverLevel);
             
-            // Teleport the player
-            player.sendSystemMessage(Component.literal("§8§oYou feel yourself being pulled into the void..."));
+            // No explicit message needed
             
             player.changeDimension(serverLevel, new VoidTeleporter(destPos));
             
@@ -207,12 +205,11 @@ public class TheVoidPortalHandler {
                                         true, false),
                                 player);
                         
-                        // Subtle lore message
-                        player.sendSystemMessage(Component.literal("§8§oThe source of all fear - you can feel it watching you..."));
+                        // No explicit message needed
                     }));
         } else {
             LOGGER.error("Failed to get The Void dimension for teleportation");
-            player.sendSystemMessage(Component.literal("§cThe portal fizzles out..."));
+            // No message needed
         }
     }
     
@@ -232,7 +229,7 @@ public class TheVoidPortalHandler {
                         new GlitchScreenPacket(0, 0.8f, 40),
                         player);
                 
-                player.sendSystemMessage(Component.literal("§8§oYou feel yourself being pulled back to reality..."));
+                // No explicit message needed
                 
                 // Teleport back
                 Vec3 destPos = dest.position;
@@ -242,16 +239,14 @@ public class TheVoidPortalHandler {
                 // Remove from return map
                 returnDestinations.remove(player.getUUID());
                 
-                // After return effects
+                // After return effects - trigger a random horror event
                 destLevel.getServer().tell(new net.minecraft.server.TickTask(
                         destLevel.getServer().getTickCount() + 20,
                         () -> {
-                            player.sendSystemMessage(Component.literal("§8§oSomething followed you back..."));
+                            // No message needed
                             
-                            // Chance to spawn an entity when returning
-                            if (RANDOM.nextFloat() < 0.3f) {
-                                HorrorManager.getInstance().triggerRandomEvent(player);
-                            }
+                            // Trigger a horror event
+                            HorrorManager.getInstance().triggerRandomEvent(player);
                         }));
             }
         } else {
@@ -404,14 +399,14 @@ public class TheVoidPortalHandler {
                     bookTag.putString("title", "The Void Beckons");
                     bookTag.putString("author", "Unknown");
                     
-                    // Add lore pages
+                    // Add lore pages with minimal cryptic hints
                     net.minecraft.nbt.ListTag pages = new net.minecraft.nbt.ListTag();
                     pages.add(net.minecraft.nbt.StringTag.valueOf(Component.Serializer.toJson(
                             Component.literal("I've found it. The source of all these entities. A place between dimensions where they wait, watching us. The signals are clear now."))));
                     pages.add(net.minecraft.nbt.StringTag.valueOf(Component.Serializer.toJson(
                             Component.literal("They call it Protocol 37. It's not just an entity, but a project. A system to watch us. To study us. I think someone created them, but lost control."))));
                     pages.add(net.minecraft.nbt.StringTag.valueOf(Component.Serializer.toJson(
-                            Component.literal("The portal requires crying obsidian. Ancient debris. Pieces from The End. They're afraid of what's coming through. But I need to see for myself."))));
+                            Component.literal("'The gateway requires either 1 crying obsidian, ancient debris, or an end portal frame. And the touch of one being.' I need to see for myself."))));
                     
                     bookTag.put("pages", pages);
                     chest.setItem(0, book);

@@ -236,55 +236,39 @@ public class InvisibleProtocol37 extends Monster {
     }
     
     /**
-     * Spawn rules for this entity
+     * Spawn rules for the invisible entity
      */
     public static boolean checkSpawnRules(EntityType<? extends Monster> entity, ServerLevelAccessor level, 
                                           MobSpawnType spawnType, BlockPos pos, RandomSource random) {
-        // Always allow command/event spawning for debugging
-        if (spawnType == MobSpawnType.COMMAND || spawnType == MobSpawnType.EVENT || spawnType == MobSpawnType.SPAWN_EGG) {
-            return true;
-        }
-        
         // Check if community entities are enabled in config
         if (!HorrorConfig.ENABLE_COMMUNITY_ENTITIES.get()) {
             return false;
         }
         
-        // Basic spawn requirements - check for solid ground and air space
-        if (!level.getBlockState(pos).isAir() || 
-            !level.getBlockState(pos.above()).isAir() || 
-            !level.getBlockState(pos.below()).isSolid()) {
-            return false;
-        }
-        
-        // Similar spawn rules to Protocol_37
         if (spawnType == MobSpawnType.NATURAL) {
-            // Only spawn with configured chance, but decreased to make spawning more likely
-            int spawnChance = Math.max(1, HorrorConfig.INVISIBLE_PROTOCOL_37_SPAWN_CHANCE.get() / 2);
-            if (random.nextInt(spawnChance) != 0) {
+            // Only spawn with configured chance
+            if (random.nextInt(HorrorConfig.INVISIBLE_PROTOCOL_37_SPAWN_CHANCE.get()) != 0) {
                 return false;
             }
             
             // Check if there's a player nearby
-            Player nearestPlayer = level.getNearestPlayer(pos.getX(), pos.getY(), pos.getZ(), 100.0, false);
+            Player nearestPlayer = level.getNearestPlayer(pos.getX(), pos.getY(), pos.getZ(), 64.0, false);
             
             if (nearestPlayer != null) {
                 double distanceToPlayer = nearestPlayer.distanceToSqr(pos.getX(), pos.getY(), pos.getZ());
                 
-                // Spawn between 3-4 blocks away from player
-                boolean isInRange = distanceToPlayer >= 3*3 && distanceToPlayer <= 4*4;
-                
-                // Add debug logging to help troubleshoot spawning
-                if (isInRange) {
-                    boolean isUnderground = !level.canSeeSky(pos);
-                    LOGGER.debug("InvisibleProtocol37 spawn conditions met at ({}, {}, {}) - {} blocks from player, underground: {}", 
-                            pos.getX(), pos.getY(), pos.getZ(), Math.sqrt(distanceToPlayer), isUnderground);
+                // Spawn very close to player (3-4 blocks) - keep original range for invisibles
+                if (distanceToPlayer >= 3*3 && distanceToPlayer <= 4*4) {
+                    // Use simplified spawn check to work in any biome
+                    return level.getBlockState(pos.below()).isSolid() && 
+                           level.getBlockState(pos).isAir() && 
+                           level.getBlockState(pos.above()).isAir();
                 }
-                
-                return isInRange;
             }
+            return false;
         }
         
+        // For non-natural spawns, use standard monster rules
         return Monster.checkMonsterSpawnRules(entity, level, spawnType, pos, random);
     }
 } 

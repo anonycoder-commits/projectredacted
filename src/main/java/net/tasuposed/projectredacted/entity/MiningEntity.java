@@ -269,18 +269,9 @@ public class MiningEntity extends Monster {
             return false;
         }
         
-        // Basic spawn requirements
-        // Check if spawn location has enough space and solid ground
-        if (!level.getBlockState(pos).isAir() || 
-            !level.getBlockState(pos.above()).isAir() || 
-            !level.getBlockState(pos.below()).isSolid()) {
-            return false;
-        }
-        
         if (spawnType == MobSpawnType.NATURAL) {
-            // Only spawn with configured chance, but decreased to make spawning more likely
-            int spawnChance = Math.max(1, HorrorConfig.MINING_ENTITY_SPAWN_CHANCE.get() / 2);
-            if (random.nextInt(spawnChance) != 0) {
+            // Only spawn with configured chance
+            if (random.nextInt(HorrorConfig.MINING_ENTITY_SPAWN_CHANCE.get()) != 0) {
                 return false;
             }
             
@@ -297,17 +288,15 @@ public class MiningEntity extends Monster {
             if (nearestPlayer != null) {
                 double distanceToPlayer = nearestPlayer.distanceToSqr(pos.getX(), pos.getY(), pos.getZ());
                 
-                // Spawn much closer to player (4-5 blocks away) - for more immediate scary effect
-                boolean isInRange = distanceToPlayer >= 4*4 && distanceToPlayer <= 5*5;
-                
-                // Debug messages to help troubleshoot spawning
-                if (isInRange) {
-                    LOGGER.debug("MiningEntity spawn conditions met at ({}, {}, {}) - {} blocks from player", 
-                            pos.getX(), pos.getY(), pos.getZ(), Math.sqrt(distanceToPlayer));
+                // Keep original close range (4-5 blocks)
+                if (distanceToPlayer >= 4*4 && distanceToPlayer <= 5*5) {
+                    // Use simplified spawn check that works in any underground area
+                    return level.getBlockState(pos.below()).isSolid() && 
+                           level.getBlockState(pos).isAir() && 
+                           level.getBlockState(pos.above()).isAir();
                 }
-                
-                return isInRange;
             }
+            return false;
         }
         
         return Monster.checkMonsterSpawnRules(entity, level, spawnType, pos, random);

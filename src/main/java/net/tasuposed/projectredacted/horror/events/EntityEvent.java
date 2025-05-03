@@ -1,8 +1,14 @@
 package net.tasuposed.projectredacted.horror.events;
 
+import java.util.List;
+import java.util.Random;
+import java.util.function.Consumer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -11,21 +17,14 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.phys.Vec3;
+import net.tasuposed.projectredacted.config.HorrorConfig;
 import net.tasuposed.projectredacted.entity.EntityRegistry;
 import net.tasuposed.projectredacted.entity.Iteration;
 import net.tasuposed.projectredacted.entity.Protocol_37;
 import net.tasuposed.projectredacted.network.NetworkHandler;
 import net.tasuposed.projectredacted.network.packets.GlitchEntityPacket;
 import net.tasuposed.projectredacted.network.packets.GlitchScreenPacket;
-import net.tasuposed.projectredacted.config.HorrorConfig;
 import net.tasuposed.projectredacted.network.packets.RenderDistancePacket;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.List;
-import java.util.Random;
-import java.util.function.Consumer;
 
 /**
  * Handles entity-related horror events
@@ -401,18 +400,6 @@ public class EntityEvent {
                 new RenderDistancePacket(renderDistance, duration, fadeEffect),
                 player);
         
-        // Potentially send a thematic message based on severity of reduction
-        if (renderDistance <= 3 && random.nextFloat() < 0.3f) { // Reduced chance from 0.7f to 0.3f
-            String[] messages = {
-                "§8§oThe void stretches toward you...",
-                "§8§oYour vision dims...",
-                "§8§oThe darkness grows...",
-                "§8§o§kIt wants§r §8§oto reach you..."
-            };
-            
-            player.sendSystemMessage(Component.literal(messages[random.nextInt(messages.length)]));
-        }
-        
         // If multiplayer syncing is enabled, also apply to nearby players with reduced effects
         if (shouldSyncMultiplayer()) {
             for (ServerPlayer otherPlayer : getNearbyPlayers(player)) {
@@ -424,11 +411,6 @@ public class EntityEvent {
                     NetworkHandler.sendToPlayer(
                             new RenderDistancePacket(nearbyRenderDistance, nearbyDuration, fadeEffect),
                             otherPlayer);
-                    
-                    // Only send message very rarely to nearby players
-                    if (renderDistance <= 3 && random.nextFloat() < 0.1f) { // Reduced chance from 0.3f to 0.1f
-                        otherPlayer.sendSystemMessage(Component.literal("§8§oA shadow falls..."));
-                    }
                 }
             }
         }

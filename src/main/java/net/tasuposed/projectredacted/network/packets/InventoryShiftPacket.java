@@ -53,57 +53,59 @@ public class InventoryShiftPacket {
      * Client-side handler
      */
     private static void handleOnClient(InventoryShiftPacket packet) {
-        Minecraft minecraft = Minecraft.getInstance();
-        
-        if (minecraft.player == null) {
-            return;
-        }
-        
-        Inventory inventory = minecraft.player.getInventory();
-        
-        // We'll shift more items (4-8) instead of just 2-5
-        int itemsToShift = 4 + random.nextInt(5);
-        
-        // Get non-empty slots to potentially shift
-        List<Integer> nonEmptySlots = new ArrayList<>();
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            if (!inventory.getItem(i).isEmpty()) {
-                nonEmptySlots.add(i);
+        try {
+            // Get client and player
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null) return;
+            
+            Inventory inventory = mc.player.getInventory();
+            
+            // Create a list of all inventory items
+            List<ItemStack> hotbarItems = new ArrayList<>();
+            List<ItemStack> mainInventoryItems = new ArrayList<>();
+            
+            // Split inventory into hotbar and main sections
+            for (int i = 0; i < 9; i++) {
+                hotbarItems.add(inventory.getItem(i).copy());
             }
-        }
-        
-        // If we don't have enough items, reduce the number to shift
-        itemsToShift = Math.min(itemsToShift, nonEmptySlots.size() / 2);
-        
-        // Shuffle the non-empty slots
-        Collections.shuffle(nonEmptySlots);
-        
-        // Swap pairs of items
-        for (int i = 0; i < itemsToShift && i * 2 + 1 < nonEmptySlots.size(); i++) {
-            int slotA = nonEmptySlots.get(i * 2);
-            int slotB = nonEmptySlots.get(i * 2 + 1);
             
-            // Get the items
-            ItemStack itemA = inventory.getItem(slotA).copy();
-            ItemStack itemB = inventory.getItem(slotB).copy();
+            for (int i = 9; i < 36; i++) {
+                mainInventoryItems.add(inventory.getItem(i).copy());
+            }
             
-            // Swap them
-            inventory.setItem(slotA, itemB);
-            inventory.setItem(slotB, itemA);
-        }
-        
-        // 35% chance to also play a creepy sound for more impact
-        if (random.nextFloat() < 0.35f) {
-            minecraft.level.playLocalSound(
-                minecraft.player.getX(),
-                minecraft.player.getY(),
-                minecraft.player.getZ(),
-                net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT,
-                net.minecraft.sounds.SoundSource.HOSTILE,
-                0.5f,
-                0.5f + random.nextFloat() * 0.5f,
-                false
-            );
+            // Log inventory status before shifting
+            System.out.println("[InventoryShift] Starting inventory shift with " + 
+                hotbarItems.size() + " hotbar items and " + 
+                mainInventoryItems.size() + " main inventory items");
+            
+            // Shuffle each section separately for more controlled chaos
+            Collections.shuffle(hotbarItems, random);
+            Collections.shuffle(mainInventoryItems, random);
+            
+            // Redistribute items
+            for (int i = 0; i < 9; i++) {
+                inventory.setItem(i, hotbarItems.get(i));
+            }
+            
+            for (int i = 0; i < mainInventoryItems.size(); i++) {
+                inventory.setItem(i + 9, mainInventoryItems.get(i));
+            }
+            
+            // Play UI sound to indicate something happened
+            mc.getSoundManager().play(new net.minecraft.client.resources.sounds.SimpleSoundInstance(
+                    net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 
+                    net.minecraft.sounds.SoundSource.MASTER, 
+                    0.5F, 
+                    1.0F + (random.nextFloat() - random.nextFloat()) * 0.2F, 
+                    random.nextLong(), 
+                    null));
+            
+            // Log success
+            System.out.println("[InventoryShift] Successfully completed inventory shift");
+        } catch (Exception e) {
+            // Log any errors that occur during shifting
+            System.err.println("[InventoryShift] Error shifting inventory: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 } 

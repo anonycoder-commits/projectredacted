@@ -76,8 +76,14 @@ public class NetworkHandler {
     /**
      * Send a packet to a specific player
      */
-    public static void sendToPlayer(Object packet, ServerPlayer player) {
-        CHANNEL.sendTo(packet, player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
+    public static <T> void sendToPlayer(T packet, ServerPlayer player) {
+        try {
+            CHANNEL.sendTo(packet, player.connection.getConnection(), NetworkDirection.PLAY_TO_CLIENT);
+            System.out.println("[NetworkHandler] Successfully sent packet of type " + packet.getClass().getSimpleName() + " to player " + player.getName().getString());
+        } catch (Exception e) {
+            System.err.println("[NetworkHandler] Error sending packet of type " + packet.getClass().getSimpleName() + " to player " + player.getName().getString() + ": " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     /**

@@ -1,27 +1,35 @@
 package net.tasuposed.projectredacted.horror;
 
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.tasuposed.projectredacted.ProjectRedacted;
-import net.tasuposed.projectredacted.config.HorrorConfig;
-import net.tasuposed.projectredacted.horror.stage.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+
 import org.slf4j.Logger;
+
 import com.mojang.logging.LogUtils;
+
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.server.MinecraftServer;
-import java.util.UUID;
-
-import java.util.*;
-import java.util.ArrayList;
-import java.util.List;
-import net.tasuposed.projectredacted.horror.events.EntityEvent;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.tasuposed.projectredacted.config.HorrorConfig;
+import net.tasuposed.projectredacted.horror.stage.DisturbanceStage;
+import net.tasuposed.projectredacted.horror.stage.FakeGlitchStage;
+import net.tasuposed.projectredacted.horror.stage.FinalStage;
+import net.tasuposed.projectredacted.horror.stage.HorrorStage;
+import net.tasuposed.projectredacted.horror.stage.MetaStage;
+import net.tasuposed.projectredacted.horror.stage.ObviousStage;
+import net.tasuposed.projectredacted.horror.stage.SubtleStage;
 
 /**
  * Main manager for all horror elements in the mod.
@@ -182,53 +190,50 @@ public class HorrorManager {
      * Trigger random horror events based on player's current stage
      */
     public void triggerRandomEvent(Player player) {
-        // Skip if configs aren't loaded yet
-        if (!configLoaded) {
-            LOGGER.debug("Config not loaded, skipping event trigger");
+        // Skip if not a server player
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             return;
         }
         
-        PlayerHorrorState state = getPlayerState(player);
-        int currentStage = state.getStage();
-        
-        // Don't trigger events if horror is disabled
-        if (!HorrorConfig.HORROR_ENABLED.get()) {
-            LOGGER.debug("Horror disabled, skipping event trigger");
+        HorrorStage currentStage = getCurrentStage(player);
+        if (currentStage == null) {
             return;
         }
         
-        // Get appropriate stage and trigger a random event
-        if (currentStage >= 0 && currentStage < stages.size()) {
-            HorrorStage stage = stages.get(currentStage);
-            LOGGER.info("Triggering horror event for player {} at stage {}: {}", 
-                player.getName().getString(), currentStage, stage.getClass().getSimpleName());
-            try {
-                // Check if multiplayer synchronization is enabled
-                if (player.level().getServer() != null && player.level().getServer().getPlayerCount() > 1 
-                    && HorrorConfig.SYNC_MULTIPLAYER_EVENTS.get()) {
-                    // Synchronize the event across all players in multiplayer
-                    triggerSynchronizedEvent(player, stage);
-                } else {
-                    // Single player or sync disabled, trigger normally
-                    stage.triggerRandomEvent(player);
-                }
-                
-                // Record this successful event
-                hadEventLastTick = true;
-                lastEventType = stage.getClass().getSimpleName();
-                
-                // Add to recent events list (max 10 events)
-                String eventInfo = System.currentTimeMillis() + ": " + lastEventType + " for " + player.getName().getString();
-                recentEvents.add(0, eventInfo); // Add at beginning of list
-                if (recentEvents.size() > 10) {
-                    recentEvents.remove(recentEvents.size() - 1); // Remove oldest
-                }
-            } catch (Exception e) {
-                // Log any exceptions that occur during event triggering
-                LOGGER.error("Error triggering horror event: ", e);
+        // Trigger the event
+        try {
+            // Check if multiplayer synchronization is enabled
+            if (player.level().getServer() != null && player.level().getServer().getPlayerCount() > 1 
+                && HorrorConfig.SYNC_MULTIPLAYER_EVENTS.get()) {
+                // Synchronize the event across all players in multiplayer
+                triggerSynchronizedEvent(serverPlayer, currentStage);
+            } else {
+                // Single player or sync disabled, trigger normally
+                currentStage.triggerRandomEvent(serverPlayer);
             }
-        } else {
-            LOGGER.warn("Invalid horror stage {} for player {}", currentStage, player.getName().getString());
+            
+            // Log the event for debug purposes
+            hadEventLastTick = true;
+            lastEventType = currentStage.getClass().getSimpleName();
+            
+            // Add to recent events list (max 10 events)
+            String eventInfo = System.currentTimeMillis() + ": " + lastEventType + " for " + player.getName().getString();
+            recentEvents.add(0, eventInfo); // Add at beginning of list
+            if (recentEvents.size() > 10) {
+                recentEvents.remove(recentEvents.size() - 1); // Remove oldest
+            }
+            
+            // Count events in the last period
+            eventCounter++;
+            
+            LOGGER.debug("Successfully triggered {} event for {}", currentStage.getClass().getSimpleName(), player.getName().getString());
+        } catch (Exception e) {
+            // Log any exceptions in detail to help diagnose issues
+            LOGGER.error("Error triggering {} event for {}: {}", 
+                currentStage.getClass().getSimpleName(), 
+                player.getName().getString(),
+                e.getMessage());
+            LOGGER.debug("Exception details:", e);
         }
     }
     
@@ -271,46 +276,18 @@ public class HorrorManager {
                     // Temporarily set to trigger player's stage for event
                     originalState.setCurrentStage(triggerStage);
                     
-                    // Trigger the event with the shared random seed
-                    triggerRandomEventWithSeed(player, stage, sharedRandom);
+                    // Directly call the stage's event method with our random seed
+                    // This avoids reflection which could fail
+                    stage.triggerRandomEvent(player);
                     
                     LOGGER.debug("Synchronized event for player: {}", player.getName().getString());
                 }
+            } catch (Exception e) {
+                LOGGER.error("Error during synchronized event for player {}: {}", 
+                    player.getName().getString(), e.getMessage());
             } finally {
                 // Always restore original stage after event
                 originalState.setCurrentStage(originalStage);
-            }
-        }
-    }
-    
-    /**
-     * Trigger a random event with a specific random seed to ensure consistency
-     */
-    private void triggerRandomEventWithSeed(Player player, HorrorStage stage, Random random) {
-        if (player instanceof ServerPlayer serverPlayer) {
-            // Use reflection to temporarily set the Random object in the stage
-            try {
-                // Get the random field from the stage class
-                java.lang.reflect.Field randomField = stage.getClass().getDeclaredField("random");
-                randomField.setAccessible(true);
-                
-                // Store the original random
-                Random originalRandom = (Random) randomField.get(stage);
-                
-                try {
-                    // Set our synchronized random
-                    randomField.set(stage, random);
-                    
-                    // Trigger the event with our synchronized random
-                    stage.triggerRandomEvent(player);
-                } finally {
-                    // Always restore the original random
-                    randomField.set(stage, originalRandom);
-                }
-            } catch (Exception e) {
-                // If reflection fails, fall back to normal triggering
-                LOGGER.error("Failed to synchronize random for horror event: ", e);
-                stage.triggerRandomEvent(player);
             }
         }
     }
@@ -343,8 +320,21 @@ public class HorrorManager {
             LOGGER.debug("Checking horror progression for {}", player.getName().getString());
         }
         
-        // Every second, with a higher probability, trigger a random horror event
-        if (player.level().getGameTime() % 20 == 0 && player.level().getRandom().nextInt(120) == 0) { // Increased frequency more (150 -> 120)
+        // Try to trigger random events based on configuration settings
+        tryTriggerRandomEvents(player);
+    }
+    
+    /**
+     * Try to trigger random events based on configuration settings
+     */
+    private void tryTriggerRandomEvents(Player player) {
+        // Skip if horror is disabled
+        if (!HorrorConfig.HORROR_ENABLED.get()) {
+            return;
+        }
+        
+        // Check roughly once per second per player with 1/40 chance (increased from 1/80)
+        if (player.level().getGameTime() % 20 == 0 && player.level().getRandom().nextInt(40) == 0) { // Increased frequency significantly (80 -> 40)
             // Get player's personal frequency modifier
             PlayerHorrorState state = getPlayerState(player);
             float frequencyModifier = state.getFrequencyModifier();
@@ -362,18 +352,29 @@ public class HorrorManager {
             
             // Boost frequency in all stages, but more in later stages
             if (currentStage == 0) {
-                baseChance *= 1.15f; // 15% boost even in subtle stage
+                baseChance *= 1.5f; // 50% boost in subtle stage (was 25%)
             } else if (currentStage == 1) {
-                baseChance *= 1.35f; // 35% boost in disturbance stage
+                baseChance *= 2.0f; // 100% boost in disturbance stage (was 50%)
             } else {
-                // Stronger boost in later stages (was only applying here before)
-                baseChance *= (1.0f + (currentStage * 0.3f)); // 60% boost at stage 2, 90% at stage 3, 120% at stage 4
+                // Stronger boost in later stages
+                baseChance *= (1.0f + (currentStage * 0.6f)); // 120% boost at stage 2, 180% at stage 3, 240% at stage 4 (was 0.4f)
             }
             
             float adjustedChance = baseChance * frequencyModifier;
             
+            // Special guarantee for Meta stage (stage 4) - ensure we get diverse events
+            if (currentStage == 4) {
+                // Force an event every ~15 seconds for the Meta stage to ensure variety
+                long playerTime = player.level().getGameTime() % 300; // 15 seconds cycle
+                if (playerTime == player.getId() % 20) {
+                    LOGGER.debug("Forcing diverse Meta stage event for {}", player.getName().getString());
+                    triggerRandomEvent(player);
+                    return;
+                }
+            }
+            
             // Random chance to trigger an event with higher probability
-            if (player.level().getRandom().nextFloat() < adjustedChance * 1.35f) { // Increased boost from 25% to 35%
+            if (player.level().getRandom().nextFloat() < adjustedChance * 2.0f) { // Increased boost from 50% to 100%
                 LOGGER.debug("Triggering random horror event for {}", player.getName().getString());
                 triggerRandomEvent(player);
             }
@@ -393,33 +394,6 @@ public class HorrorManager {
         if (HorrorConfig.RESET_ON_LOGIN.get()) {
             playerStates.remove(event.getEntity().getUUID());
         }
-    }
-    
-    /**
-     * Trigger a random event based on the current stage
-     */
-    private void triggerRandomEvent(ServerPlayer player) {
-        HorrorStage currentStage = getCurrentStage(player);
-        if (currentStage == null) {
-            return;
-        }
-        
-        // Trigger the event
-        currentStage.triggerRandomEvent(player);
-        
-        // Log the event for debug purposes
-        hadEventLastTick = true;
-        lastEventType = currentStage.getClass().getSimpleName();
-        
-        // Add to recent events list (max 10 events)
-        String eventInfo = System.currentTimeMillis() + ": " + lastEventType + " for " + player.getName().getString();
-        recentEvents.add(0, eventInfo); // Add at beginning of list
-        if (recentEvents.size() > 10) {
-            recentEvents.remove(recentEvents.size() - 1); // Remove oldest
-        }
-        
-        // Count events in the last period
-        eventCounter++;
     }
     
     /**

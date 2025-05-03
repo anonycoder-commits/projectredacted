@@ -60,7 +60,7 @@ public class HorrorStructureSpawner {
     }
     
     // Base chance of structure spawn
-    private static final float BASE_STRUCTURE_CHANCE = 0.0012f;
+    private static final float BASE_STRUCTURE_CHANCE = 0.0025f; // Increased from 0.0012f
     
     // Map to track structures spawned per chunk
     private static final Map<Long, StructureData> structuresPerChunk = new HashMap<>();

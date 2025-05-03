@@ -61,28 +61,28 @@ public class MetaStage implements HorrorStage {
             int randomValue = random.nextInt(100);
             
             // Adjust probabilities to increase UI effects
-            if (randomValue < 22) {
-                // 22% chance for inventory manipulation (case 6) - up from 0%
+            if (randomValue < 35) {
+                // 35% chance for inventory manipulation (case 6) - up from 22%
                 choice = 6;
                 eventsSinceLastEntitySpawn++;
-            } else if (randomValue < 38) {
-                // 16% chance for mysterious item (case 7) - up from 10%
+            } else if (randomValue < 50) {
+                // 15% chance for mysterious item (case 7) - slightly down from 16%
                 choice = 7;
                 eventsSinceLastEntitySpawn = 0;
-            } else if (randomValue < 52) {
-                // 14% chance for fake crash (case 5) - slightly decreased
+            } else if (randomValue < 65) {
+                // 15% chance for fake crash (case 5) - up from 14%
                 choice = 5;
                 eventsSinceLastEntitySpawn = 0;
-            } else if (randomValue < 62) {
-                // 10% chance for entity spawn (case 8 - screenshot with entity) - down from 15%
+            } else if (randomValue < 75) {
+                // 10% chance for entity spawn (case 8 - screenshot with entity) - unchanged
                 choice = 8;
                 eventsSinceLastEntitySpawn = 0;
-            } else if (randomValue < 72) {
-                // 10% chance for hostile entity attack sequence (case 9) - down from 15%
+            } else if (randomValue < 85) {
+                // 10% chance for hostile entity attack sequence (case 9) - unchanged
                 choice = 9;
                 eventsSinceLastEntitySpawn = 0;
             } else {
-                // 28% chance for other effects, evenly distributed - down from 45%
+                // 15% chance for other effects, evenly distributed - down from 28%
                 choice = random.nextInt(5); // Choose from cases 0-4
                 eventsSinceLastEntitySpawn++;
             }
@@ -225,10 +225,22 @@ public class MetaStage implements HorrorStage {
                                 40), // 2 seconds
                         serverPlayer);
                 
-                // Shift inventory items with more random shuffling
-                NetworkHandler.sendToPlayer(
-                        new InventoryShiftPacket(),
-                        serverPlayer);
+                try {
+                    // Log the inventory shift attempt
+                    System.out.println("[MetaStage] Attempting to send inventory shift packet to player: " + serverPlayer.getName().getString());
+                    
+                    // Shift inventory items with more random shuffling
+                    NetworkHandler.sendToPlayer(
+                            new InventoryShiftPacket(),
+                            serverPlayer);
+                    
+                    // Log success
+                    System.out.println("[MetaStage] Successfully sent inventory shift packet");
+                } catch (Exception e) {
+                    // Log failure
+                    System.err.println("[MetaStage] Failed to send inventory shift packet: " + e.getMessage());
+                    e.printStackTrace();
+                }
                 
                 // Play unsettling sound
                 soundEvent.playHorrorWhisper(serverPlayer);

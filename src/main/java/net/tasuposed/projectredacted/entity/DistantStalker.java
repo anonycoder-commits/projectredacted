@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
@@ -18,6 +19,8 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.tasuposed.projectredacted.config.HorrorConfig;
 
@@ -38,10 +41,17 @@ public class DistantStalker extends Monster {
     private static final int DISAPPEAR_TIME = 15; // Ticks before disappearing
     
     // Inactivity timer - disappear if player doesn't get close
-    private int inactivityTimer = 2400; // 2 minutes (120 seconds)
+    private int inactivityTimer = 4800; // Increased from 2400 to 4800 (4 minutes)
+    
+    // Visibility enhancement
+    private int particleTimer = 0;
+    private int repositionTimer = 0;
+    private static final int PARTICLE_INTERVAL = 15; // Every 15 ticks
+    private static final int REPOSITION_CHECK_INTERVAL = 100; // Check every 5 seconds
     
     public DistantStalker(EntityType<? extends Monster> entityType, Level level) {
         super(entityType, level);
+        this.setGlowingTag(true); // Make the entity glow for better visibility
     }
     
     @Override
@@ -94,6 +104,20 @@ public class DistantStalker extends Monster {
                         return;
                     }
                 }
+                
+                // Emit particles occasionally to make entity more visible
+                particleTimer--;
+                if (particleTimer <= 0) {
+                    emitVisibilityParticles();
+                    particleTimer = PARTICLE_INTERVAL;
+                }
+                
+                // Check if we need to reposition to a more visible location
+                repositionTimer--;
+                if (repositionTimer <= 0) {
+                    tryRepositionToVisibleLocation(nearestPlayer);
+                    repositionTimer = REPOSITION_CHECK_INTERVAL;
+                }
             }
             
             // If no player interaction for too long, disappear
@@ -101,6 +125,97 @@ public class DistantStalker extends Monster {
             if (inactivityTimer <= 0) {
                 LOGGER.debug("DistantStalker disappearing due to inactivity");
                 this.discard();
+            }
+        }
+    }
+    
+    /**
+     * Emit particles to make entity more visible in dense terrain
+     */
+    private void emitVisibilityParticles() {
+        // Every third particle interval, create a larger burst
+        boolean largeBurst = particleTimer % (PARTICLE_INTERVAL * 3) == 0;
+        
+        // Get particle count based on burst size
+        int particleCount = largeBurst ? 15 : 5;
+        
+        // Create particles around the entity
+        for (int i = 0; i < particleCount; i++) {
+            double offsetX = random.nextDouble() * 1.0 - 0.5;
+            double offsetY = random.nextDouble() * 2.0;
+            double offsetZ = random.nextDouble() * 1.0 - 0.5;
+            
+            this.level().addParticle(
+                ParticleTypes.SMOKE,
+                this.getX() + offsetX,
+                this.getY() + 1.0 + offsetY,
+                this.getZ() + offsetZ,
+                0, 0.05, 0
+            );
+        }
+    }
+    
+    /**
+     * Try to reposition the entity to a more visible location if necessary
+     */
+    private void tryRepositionToVisibleLocation(Player player) {
+        // Check if player has line-of-sight to this entity
+        boolean canPlayerSee = this.level().clip(new ClipContext(
+            new Vec3(player.getX(), player.getEyeY(), player.getZ()),
+            new Vec3(this.getX(), this.getEyeY(), this.getZ()),
+            ClipContext.Block.COLLIDER,
+            ClipContext.Fluid.NONE,
+            player
+        )).getType() == HitResult.Type.MISS;
+        
+        // Only reposition if player can't see us and we're far enough away
+        if (!canPlayerSee && this.distanceTo(player) > 10.0) {
+            // Find a better visible position around the player
+            for (int attempt = 0; attempt < 10; attempt++) {
+                // Calculate random position within desired distance range (20-30 blocks)
+                double distance = 20.0 + random.nextDouble() * 10.0;
+                double angle = random.nextDouble() * Math.PI * 2;
+                
+                double x = player.getX() + Math.sin(angle) * distance;
+                double z = player.getZ() + Math.cos(angle) * distance;
+                
+                // Find a Y position that's visible and has solid ground
+                for (int yOffset = -5; yOffset <= 10; yOffset++) {
+                    int y = (int)(player.getY() + yOffset);
+                    BlockPos pos = new BlockPos((int)x, y, (int)z);
+                    
+                    // Check if this position has solid ground and open space
+                    if (this.level().getBlockState(pos.below()).isSolid() && 
+                        this.level().getBlockState(pos).isAir() && 
+                        this.level().getBlockState(pos.above()).isAir()) {
+                        
+                        // Check if player would have line-of-sight to this position
+                        boolean wouldBeVisible = this.level().clip(new ClipContext(
+                            new Vec3(player.getX(), player.getEyeY(), player.getZ()),
+                            new Vec3(x, y + 1.0, z),
+                            ClipContext.Block.COLLIDER,
+                            ClipContext.Fluid.NONE,
+                            player
+                        )).getType() == HitResult.Type.MISS;
+                        
+                        if (wouldBeVisible) {
+                            // Found a visible position - teleport there
+                            this.teleportTo(x, y, z);
+                            
+                            // Create smoke effect at old and new positions
+                            if (this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                                serverLevel.sendParticles(
+                                    ParticleTypes.LARGE_SMOKE,
+                                    this.getX(), this.getY() + 1.0, this.getZ(),
+                                    10, 0.2, 0.5, 0.2, 0.02
+                                );
+                            }
+                            
+                            LOGGER.debug("DistantStalker repositioned to more visible location at {},{},{}", x, y, z);
+                            return;
+                        }
+                    }
+                }
             }
         }
     }
@@ -135,11 +250,19 @@ public class DistantStalker extends Monster {
             if (nearestPlayer != null) {
                 double distanceToPlayer = nearestPlayer.distanceToSqr(pos.getX(), pos.getY(), pos.getZ());
                 
-                // Only spawn at a distance of 20-30 blocks (changed from 60-90 blocks)
-                return distanceToPlayer >= 20*20 && distanceToPlayer <= 30*30;
+                // Only spawn at a distance of 20-30 blocks
+                if (distanceToPlayer >= 20*20 && distanceToPlayer <= 30*30) {
+                    // Only check for a solid block below, ignore other Monster spawn rules
+                    // that would restrict biomes and require light level checks
+                    return level.getBlockState(pos.below()).isSolid() && 
+                           level.getBlockState(pos).isAir() && 
+                           level.getBlockState(pos.above()).isAir();
+                }
             }
+            return false;
         }
         
+        // For non-natural spawns, use standard monster rules
         return Monster.checkMonsterSpawnRules(entity, level, spawnType, pos, random);
     }
     

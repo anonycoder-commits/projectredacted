@@ -78,7 +78,7 @@ public class Iteration extends Monster {
     protected void registerGoals() {
         this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2D, true)); // Faster attack speed
         this.goalSelector.addGoal(2, new MoveTowardsTargetGoal(this, 1.0D, 32.0F)); // Move faster toward target
-        this.goalSelector.addGoal(3, new WaterAvoidingRandomStrollGoal(this, 1.0D));
+        this.goalSelector.addGoal(3, new WaterAvoidingRandomStrollGoal(this, 1.0D)); // Iteration avoids water - digital entity disrupted by water
         this.goalSelector.addGoal(4, new LookAtPlayerGoal(this, Player.class, 12.0F)); // Look from further away
         this.goalSelector.addGoal(5, new RandomLookAroundGoal(this));
         
@@ -645,7 +645,7 @@ public class Iteration extends Monster {
                 if (random.nextFloat() < 0.3f) {
                     switch (stalkingPhase) {
                         case 0 -> player.sendSystemMessage(Component.literal("§7A cold chill runs down your spine..."));
-                        case 1 -> player.sendSystemMessage(Component.literal("§5Your vision blurs as the §4Iteration§5 attacks..."));
+                        case 1 -> {} // No message in aggressive phase
                         case 2 -> player.sendSystemMessage(Component.literal("§4§oT̶̬̎h̴̫̓e̶͔̔ ̴̜̊Ȟ̸̬ǘ̸̡n̸̮̐t̷̬̉ ̴̲̃i̸̘̓s̷̙̆ ̸̱̍ö̷̢n̷̬̄.̷̜̄.̴̨̇.̵̲̈́"));
                     }
                 }

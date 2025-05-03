@@ -15,6 +15,9 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -890,8 +893,78 @@ public class HorrorCommands {
                     mysteryItem.setHoverName(Component.literal("§4D̸̢̦̱̥͙̘̩͑̊͐̓̂̌͜o̷̢̗̼̬͔̤̱̠̓̿͊̇͊̽̕͜͡n̵̨̧̝̯̞̪̥̪͑͑́͐̆̃̋͆̚̕'̵̬̹̝͕͕̬̙̟̓̈́̓̿̈̌̚͟t̷̨̪͇̙̹̯͛́̓̅̀͌̄̍͟͢ R̢̡̫̮̗̅͊̏̌̌̚͝ȩ̝̯̪̜͙͐̓̍̄̄̊̄̀̚͝a̷̛̘̤̘̗̘̥̙̥͒̐̄̄̈̀͒̽d̴̪̱͉̬̰̭̤̏̇͑̽͑̽̂̿͋͟ T̷̢̗̗̗̦͚͌̇̈́̀̃̚͢͞ḩ̢͙̪̳̱̬̯̓̐̏̾͌̎̑͢͝͝į̸̟̳̮̥̪̮͔̱͙̓́͗͐̽̀̓͌̕͡s̨̫̻̫̥̳̿̓̐̄͆͛̓"));
                     mysteryItem.getOrCreateTag().putString("Lore", "§8§oI'm watching you play...");
                     player.getInventory().add(mysteryItem);
-                    player.sendSystemMessage(Component.literal("§4§oI left you a gift..."));
-                    source.sendSuccess(() -> Component.literal("§aAdded mystery item to " + player.getName().getString() + "'s inventory"), true);
+                    
+                    // Random chance to add a lore book as well (or instead in rare cases)
+                    boolean giveLoreBook = player.level().getRandom().nextFloat() < 0.65f;
+                    boolean replacePaper = giveLoreBook && player.level().getRandom().nextFloat() < 0.15f;
+                    
+                    if (giveLoreBook) {
+                        // Create a mysterious lore book
+                        ItemStack loreBook = new ItemStack(Items.WRITTEN_BOOK);
+                        CompoundTag bookTag = loreBook.getOrCreateTag();
+                        
+                        // Choose a random lore book type
+                        int bookType = player.level().getRandom().nextInt(3);
+                        String title, author;
+                        ListTag pages = new ListTag();
+                        
+                        switch (bookType) {
+                            case 0:
+                                title = "The Watchers";
+                                author = "Unknown Observer";
+                                pages.add(StringTag.valueOf(Component.Serializer.toJson(
+                                    Component.literal("I've been documenting them for months. Protocol_37 isn't just an entity - it's a program, a system. They're watching us. Always watching."))));
+                                pages.add(StringTag.valueOf(Component.Serializer.toJson(
+                                    Component.literal("Sometimes they appear in the distance. Sometimes they're invisible. The most terrifying ones transform when you get too close."))));
+                                break;
+                                
+                            case 1:
+                                title = "Disappearances";
+                                author = "A Survivor";
+                                pages.add(StringTag.valueOf(Component.Serializer.toJson(
+                                    Component.literal("Three more players gone this week. We found their items scattered where they last logged in. No trace otherwise."))));
+                                pages.add(StringTag.valueOf(Component.Serializer.toJson(
+                                    Component.literal("The invisible one appears right before it happens. If you hear mining sounds but see no one, RUN."))));
+                                break;
+                                
+                            default:
+                                title = "DO NOT LOOK AT THEM";
+                                author = "";
+                                pages.add(StringTag.valueOf(Component.Serializer.toJson(
+                                    Component.literal("§4DON'T LOOK DIRECTLY AT THEM\n§0If you see one in the distance, ignore it. Don't approach. Don't study it. Just leave."))));
+                                pages.add(StringTag.valueOf(Component.Serializer.toJson(
+                                    Component.literal("§4They take the curious ones first.\n§0The distant stalker is harmless. The protocol is not. But there are worse things in the shadows..."))));
+                                break;
+                        }
+                        
+                        bookTag.putString("title", title);
+                        bookTag.putString("author", author);
+                        bookTag.put("pages", pages);
+                        bookTag.putBoolean("resolved", true);
+                        
+                        player.getInventory().add(loreBook);
+                        
+                        // If we replace the paper, don't send the paper item message
+                        if (!replacePaper) {
+                            player.sendSystemMessage(Component.literal("§4§oI left you a gift..."));
+                        }
+                        
+                        // Add a specific message for the book
+                        player.sendSystemMessage(Component.literal("§5§oThe truth is in the pages..."));
+                    } else {
+                        // Original message for just the paper
+                        player.sendSystemMessage(Component.literal("§4§oI left you a gift..."));
+                    }
+                    
+                    source.sendSuccess(() -> {
+                        if (giveLoreBook && replacePaper) {
+                            return Component.literal("§aAdded lore book to " + player.getName().getString() + "'s inventory");
+                        } else if (giveLoreBook) {
+                            return Component.literal("§aAdded mystery item and lore book to " + player.getName().getString() + "'s inventory");
+                        } else {
+                            return Component.literal("§aAdded mystery item to " + player.getName().getString() + "'s inventory");
+                        }
+                    }, true);
                     break;
                     
                 case FAKE_SCREENSHOT:

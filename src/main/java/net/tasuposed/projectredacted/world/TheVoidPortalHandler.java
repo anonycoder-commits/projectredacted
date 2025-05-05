@@ -32,6 +32,8 @@ import net.tasuposed.projectredacted.network.packets.GlitchScreenPacket;
 import net.tasuposed.projectredacted.network.NetworkHandler;
 import net.tasuposed.projectredacted.network.packets.PlaySoundPacket;
 import net.minecraftforge.registries.ForgeRegistries;
+import net.tasuposed.projectredacted.horror.events.EndgameSequence;
+import net.minecraft.ChatFormatting;
 
 /**
  * Handles portals to and from The Void dimension
@@ -217,6 +219,23 @@ public class TheVoidPortalHandler {
      * Return a player from The Void back to their original dimension
      */
     public static void returnFromVoid(ServerPlayer player) {
+        // Check if world has been erased - if so, prevent return
+        if (EndgameSequence.getInstance().isWorldErased()) {
+            // Deny return and inform player
+            Component message = Component.literal("There is nowhere to return to. The world has been erased.").withStyle(ChatFormatting.DARK_RED);
+            player.sendSystemMessage(message);
+            
+            // Apply a disturbing effect
+            NetworkHandler.sendToPlayer(
+                    new GlitchScreenPacket(
+                            2, // EFFECT_CORRUPT
+                            0.9f,
+                            40), // 2 seconds
+                    player);
+            
+            return;
+        }
+        
         PortalDestination dest = returnDestinations.get(player.getUUID());
         
         if (dest != null) {
@@ -250,10 +269,16 @@ public class TheVoidPortalHandler {
                         }));
             }
         } else {
-            // No return destination saved, spawn at overworld spawn
-            ServerLevel overworld = player.server.getLevel(Level.OVERWORLD);
-            if (overworld != null) {
-                player.changeDimension(overworld, new VoidTeleporter(overworld.getSharedSpawnPos()));
+            // No return destination saved, spawn at overworld spawn - but only if world not erased
+            if (!EndgameSequence.getInstance().isWorldErased()) {
+                ServerLevel overworld = player.server.getLevel(Level.OVERWORLD);
+                if (overworld != null) {
+                    player.changeDimension(overworld, new VoidTeleporter(overworld.getSharedSpawnPos()));
+                }
+            } else {
+                // World has been erased - stay in the void
+                Component message = Component.literal("There is nowhere to return to. The world has been erased.").withStyle(ChatFormatting.DARK_RED);
+                player.sendSystemMessage(message);
             }
         }
     }

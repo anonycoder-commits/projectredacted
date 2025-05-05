@@ -51,47 +51,98 @@ public class MetaStage implements HorrorStage {
         
         int choice;
         
+        // Check if player is underground to increase entity spawn chance
+        boolean isUnderground = entityEvent.isPlayerUnderground(serverPlayer);
+        
+        // Initialize choice with default value to fix linter error
+        choice = 0;
+        
         // Force entity spawn if we haven't had one in a while
-        if (eventsSinceLastEntitySpawn >= 2) {
-            choice = random.nextInt(3) + 7; // Force cases 7, 8, or 9 (entity-related events)
+        if (eventsSinceLastEntitySpawn >= 2 || (isUnderground && eventsSinceLastEntitySpawn >= 1)) {
+            // Force cases 7, 8, 9, or 10 (entity-related events) with higher weight for MiningEntity underground
+            if (isUnderground && random.nextInt(3) == 0) {
+                // 33% chance for MiningEntity when underground
+                choice = 10; // MiningEntity
+            } else {
+                // For remaining 67% underground, or 100% above ground, select from cases 7, 8, 9
+                choice = random.nextInt(3) + 7;
+            }
             eventsSinceLastEntitySpawn = 0;
         } else {
             // Modified choice selection to favor certain events
             // Use a weighted selection system with increased entity chances
             int randomValue = random.nextInt(100);
             
-            // Adjust probabilities to increase UI effects
-            if (randomValue < 35) {
-                // 35% chance for inventory manipulation (case 6) - up from 22%
-                choice = 6;
-                eventsSinceLastEntitySpawn++;
-            } else if (randomValue < 50) {
-                // 15% chance for mysterious item (case 7) - slightly down from 16%
-                choice = 7;
-                eventsSinceLastEntitySpawn = 0;
-            } else if (randomValue < 65) {
-                // 15% chance for fake crash (case 5) - up from 14%
-                choice = 5;
-                eventsSinceLastEntitySpawn = 0;
-            } else if (randomValue < 75) {
-                // 10% chance for entity spawn (case 8 - screenshot with entity) - unchanged
-                choice = 8;
-                eventsSinceLastEntitySpawn = 0;
-            } else if (randomValue < 85) {
-                // 10% chance for hostile entity attack sequence (case 9) - unchanged
-                choice = 9;
-                eventsSinceLastEntitySpawn = 0;
+            // Adjust probabilities based on environment
+            if (isUnderground) {
+                // Underground - significantly increased entity spawn rates
+                if (randomValue < 20) {
+                    // 20% chance for inventory manipulation (case 6) - reduced from 35%
+                    choice = 6;
+                    eventsSinceLastEntitySpawn++;
+                } else if (randomValue < 35) {
+                    // 15% chance for mysterious item (case 7)
+                    choice = 7;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 40) {
+                    // 5% chance for fake crash (case 5) - reduced from 10%
+                    choice = 5;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 55) {
+                    // 15% chance for entity spawn (case 8 - screenshot with entity) - reduced from 25%
+                    choice = 8;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 75) {
+                    // 20% chance for hostile entity attack sequence (case 9) - reduced from 30%
+                    choice = 9;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 95) {
+                    // 20% chance for mining entity (case 10) - NEW!
+                    choice = 10;
+                    eventsSinceLastEntitySpawn = 0;
+                } else {
+                    // 5% chance for other effects, evenly distributed - unchanged
+                    choice = random.nextInt(5); // Choose from cases 0-4
+                    eventsSinceLastEntitySpawn++;
+                }
             } else {
-                // 15% chance for other effects, evenly distributed - down from 28%
-                choice = random.nextInt(5); // Choose from cases 0-4
-                eventsSinceLastEntitySpawn++;
+                // Normal environment - standard distribution
+                if (randomValue < 35) {
+                    // 35% chance for inventory manipulation (case 6)
+                    choice = 6;
+                    eventsSinceLastEntitySpawn++;
+                } else if (randomValue < 50) {
+                    // 15% chance for mysterious item (case 7)
+                    choice = 7;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 55) {
+                    // 5% chance for fake crash (case 5) - reduced from 15%
+                    choice = 5;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 70) {
+                    // 15% chance for entity spawn (case 8 - screenshot with entity) - reduced from 20%
+                    choice = 8;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 85) {
+                    // 15% chance for hostile entity attack sequence (case 9) - reduced from 20%
+                    choice = 9;
+                    eventsSinceLastEntitySpawn = 0;
+                } else if (randomValue < 95) {
+                    // 10% chance for mining entity (case 10) - NEW!
+                    choice = 10;
+                    eventsSinceLastEntitySpawn = 0;
+                } else {
+                    // 5% chance for other effects, evenly distributed - unchanged
+                    choice = random.nextInt(5); // Choose from cases 0-4
+                    eventsSinceLastEntitySpawn++;
+                }
             }
         }
         
         switch (choice) {
             case 0:
                 // Send a fake disconnect message with enhanced intensity
-                serverPlayer.sendSystemMessage(Component.literal("§7[Server] Connection lost... §4§kxxx§r"));
+                serverPlayer.sendSystemMessage(Component.literal("§7[System] Network connection disrupted. §4§kxxx§r"));
                 
                 // Add a severe screen glitch before the reveal
                 NetworkHandler.sendToPlayer(
@@ -104,7 +155,7 @@ public class MetaStage implements HorrorStage {
                 // After a brief pause, reveal it was fake with a more disturbing message
                 serverPlayer.server.tell(new net.minecraft.server.TickTask(
                         serverPlayer.server.getTickCount() + 40, () -> {
-                    serverPlayer.sendSystemMessage(Component.literal("§4§k||||||§r §4C̶̡̧̥̖̘̮̦̹̿̈ͩ͆͌ͬ͒͗̉̚o̵̦̰̫̠͍̳̰̎̆͐͒͆͆͐͂ͦ̚͡n̢̤̠̪̩̫̞̱̘̫̘̟̜̄̂ͮ͛̂̀͐̿̀͜͡n̙̜̰̭̐ͯͭ̑̉ͨ͆̓̓̀̐͑͐̉̄̚̕̕͜ȅ̘̟̲̭͔͚̣͓̜̯͚̫̮͎̐ͣ̊̒ͤ̽̊̍̾́̔͠c̤̟̬̗̙̘̼̯̠̭̬̀̎̂̽̏̎̿ͣ̀͟t̵̴̗̗̫̯̊̆͒̓ͯͫ̈͝ͅį̗̝̫̰̠̺͈̹͍͓̠̳̟̻̟̙̫̋̐̅̎͋̂̽̔̍ͨͦ̽ͬ̃ͅò̸̡͎̱̫͙̭̞͖͕͓͔͚͎̺͖̫̖̲͎̗ͦͨͤͫ̓͑̽͋͆͂̽̓ͤ̿͗̽̿̀n̢͖̝̩̯̣̦̩̹̞̩̬̿͆̾͐͋̓̉͋̒́͡ ͙̹͎̟̞͍̱̹̩ͥ̉̽ͤͪͦ̒͊̅ͫͬ̔̉͂̓̄͢͡f̵̻̺͓̠̱͖̦̼̼̱̝̞̼̣̖̙̜̙̩̂̔ͬ̊ͯ͂ͯ̔ͯ̇̀̅͊ͪ̂̾̓̋ō̢̥͖̠̺̳̰͖͔̘͕̪̪͕̼̞̂ͦͣͩ͛ͤ̈̐ͩͣ̇̌͋̌͝ǘ̶̵̢͖̹̦̥̜̇̓ͯ̅ͯ͌̅̒̀n̸̡̧̡̺̠̦̞̠̬̞̯̭͚̬̳̮̺̲̟̍ͭ̎ͨ̔̊ͦ̽ͧ́dͥͪ̎͐̌͒͑̈̏̎̓̊̈́ͩͪ̐͂̆̀҉̫̻̰̙͖͈̙̠͍̮͈͕̻̦͕̼̤ͅͅ §r §4§k||||||§r"));
+                    serverPlayer.sendSystemMessage(Component.literal("§4§k||||||§r §4C̶̡̧̥̖̘̮̦̹̿̈ͩ͆͌ͬ͒͗̉̚o̵̦̰̫̠͍̳̰̎̆͐͒͆͆͐͂ͦ̚͡n̢̤̠̪̩̫̞̱̘̫̘̟̜̄̂ͮͅ"));
                     
                     // Play a creepy sound
                     soundEvent.playHorrorWhisper(serverPlayer);
@@ -313,9 +364,6 @@ public class MetaStage implements HorrorStage {
                 // Play warning sounds first
                 soundEvent.playSystemError(serverPlayer);
                 
-                // Send threatening message
-                serverPlayer.sendSystemMessage(Component.literal("§4§k|||§r §4§lITERATION ATTACK SEQUENCE INITIATED§r §4§k|||§r"));
-                
                 // Screen corruption
                 NetworkHandler.sendToPlayer(
                         new GlitchScreenPacket(
@@ -343,14 +391,27 @@ public class MetaStage implements HorrorStage {
                     // Spawn the entity using the entity event
                     entityEvent.spawnHostileIteration(serverPlayer, spawnPos);
                     
-                    // Send a final warning message
-                    serverPlayer.server.tell(new net.minecraft.server.TickTask(
-                            serverPlayer.server.getTickCount() + 20, () -> {
-                        serverPlayer.sendSystemMessage(Component.literal("§4§oIt's coming for you..."));
-                        
-                        // Play heartbeat
-                        soundEvent.playHeartbeat(serverPlayer);
-                    }));
+                    // Play heartbeat
+                    soundEvent.playHeartbeat(serverPlayer);
+                }));
+                
+                // Mark that we spawned an entity-related event
+                eventsSinceLastEntitySpawn = 0;
+                break;
+            case 10: // New case for MiningEntity
+                // Brief screen glitch to build tension
+                NetworkHandler.sendToPlayer(
+                        new GlitchScreenPacket(
+                                0, // EFFECT_STATIC
+                                0.4f, // Subtle intensity
+                                10), // Brief flash
+                        serverPlayer);
+                
+                // Spawn mining entity after a short delay
+                serverPlayer.server.tell(new net.minecraft.server.TickTask(
+                        serverPlayer.server.getTickCount() + 40, () -> {
+                    // Spawn the mining entity using our new method
+                    entityEvent.spawnMiningEntity(serverPlayer);
                 }));
                 
                 // Mark that we spawned an entity-related event

@@ -333,6 +333,20 @@ public class HorrorManager {
             return;
         }
         
+        // Check if player is underground
+        boolean isUnderground = false;
+        if (player instanceof ServerPlayer serverPlayer) {
+            isUnderground = !serverPlayer.level().canSeeSky(serverPlayer.blockPosition());
+        }
+        
+        // If underground, greatly reduce event frequency
+        if (isUnderground) {
+            // When underground, 40% chance to skip event checks to make them less frequent but not rare
+            if (player.level().getRandom().nextInt(100) < 40) {
+                return;
+            }
+        }
+        
         // Check roughly once per second per player with 1/40 chance (increased from 1/80)
         if (player.level().getGameTime() % 20 == 0 && player.level().getRandom().nextInt(40) == 0) { // Increased frequency significantly (80 -> 40)
             // Get player's personal frequency modifier
@@ -360,7 +374,27 @@ public class HorrorManager {
                 baseChance *= (1.0f + (currentStage * 0.6f)); // 120% boost at stage 2, 180% at stage 3, 240% at stage 4 (was 0.4f)
             }
             
-            float adjustedChance = baseChance * frequencyModifier;
+            // Get environment-based spawn modifier if the player is a server player
+            float environmentModifier = 1.0f;
+            if (player instanceof ServerPlayer serverPlayer) {
+                // Get new environment spawn multiplier from EntityEvent
+                environmentModifier = new net.tasuposed.projectredacted.horror.events.EntityEvent()
+                    .getEnvironmentSpawnMultiplier(serverPlayer);
+                
+                // Log for debugging when underground
+                if (environmentModifier > 1.0f) {
+                    LOGGER.debug("Environmental spawn modifier for {}: {}", 
+                        player.getName().getString(), environmentModifier);
+                }
+            }
+            
+            // If underground, further reduce chance of events
+            if (isUnderground) {
+                environmentModifier *= 0.7f; // 30% reduction in underground environments
+            }
+            
+            // Apply all modifiers
+            float adjustedChance = baseChance * frequencyModifier * environmentModifier;
             
             // Special guarantee for Meta stage (stage 4) - ensure we get diverse events
             if (currentStage == 4) {

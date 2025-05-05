@@ -102,16 +102,13 @@ public class HorrorSoundEvent {
         // Get the registered sound event
         SoundEvent whisperSound = SoundRegistry.WHISPER.get();
 
-        // Use our custom whisper sound
-        System.out.println("Playing whisper sound: " + whisperSound.getLocation());
-
         // Play a single whisper with low volume and random pitch for subtlety
         // Use non-locational sound (isLocational=false) to make it feel like it's in the player's head
         NetworkHandler.sendToPlayer(
                 new PlaySoundPacket(
                         whisperSound.getLocation(),
                         SoundSource.HOSTILE,
-                        0.25f, // Quieter volume for subtlety
+                        0.35f, // Slightly increased volume for YouTube clarity
                         random.nextFloat() * 0.3f + 0.4f, // Random pitch between 0.4-0.7
                         true,
                         false), // Non-locational sound
@@ -128,7 +125,7 @@ public class HorrorSoundEvent {
                             new PlaySoundPacket(
                                     whisperSound.getLocation(),
                                     SoundSource.HOSTILE,
-                                    0.25f,
+                                    0.35f,
                                     sharedPitch, // Use the same pitch for consistency
                                     true,
                                     false), // Non-locational sound
@@ -146,14 +143,11 @@ public class HorrorSoundEvent {
         SoundEvent heartbeatSound = SoundRegistry.HEARTBEAT.get();
 
         // Use our custom heartbeat sound
-        System.out.println("Playing heartbeat sound: " + heartbeatSound.getLocation());
-
-        // Use non-locational sound (isLocational=false) to make it feel like it's the player's own heartbeat
         NetworkHandler.sendToPlayer(
                 new PlaySoundPacket(
                         heartbeatSound.getLocation(),
                         SoundSource.MASTER,
-                        0.7f,
+                        0.8f, // Increased for YouTube clarity
                         1.0f,
                         false,
                         false), // Non-locational sound
@@ -167,7 +161,7 @@ public class HorrorSoundEvent {
                             new PlaySoundPacket(
                                     heartbeatSound.getLocation(),
                                     SoundSource.MASTER,
-                                    0.7f,
+                                    0.8f,
                                     1.0f,
                                     false,
                                     false), // Non-locational sound
@@ -185,12 +179,11 @@ public class HorrorSoundEvent {
         SoundEvent growlSound = SoundRegistry.GROWL.get();
 
         // Use our custom growl sound
-        System.out.println("Playing growl sound: " + growlSound.getLocation());
         NetworkHandler.sendToPlayer(
                 new PlaySoundPacket(
                         growlSound.getLocation(),
                         SoundSource.HOSTILE,
-                        0.8f,
+                        0.9f, // Increased for YouTube clarity
                         0.7f,
                         true, false),
                 player);
@@ -203,7 +196,7 @@ public class HorrorSoundEvent {
                             new PlaySoundPacket(
                                     growlSound.getLocation(),
                                     SoundSource.HOSTILE,
-                                    0.8f,
+                                    0.9f,
                                     0.7f,
                                     true, false),
                             otherPlayer);
@@ -370,6 +363,116 @@ public class HorrorSoundEvent {
                 }
             }
         }));
+    }
+
+    /**
+     * Play a horrifying scream sound - great for jump scares
+     */
+    public void playScream(ServerPlayer player) {
+        // Get the registered sound event
+        SoundEvent screamSound = SoundRegistry.SCREAM.get();
+
+        // Play a single scream with high volume for impact
+        NetworkHandler.sendToPlayer(
+                new PlaySoundPacket(
+                        screamSound.getLocation(),
+                        SoundSource.HOSTILE,
+                        0.95f, // Very loud for impact
+                        random.nextFloat() * 0.2f + 0.9f, // Slightly randomized high pitch
+                        true,
+                        true), // Locational for better effect
+                player);
+
+        // If multiplayer synchronization is enabled, also play for nearby players
+        if (shouldSyncMultiplayer()) {
+            float sharedPitch = random.nextFloat() * 0.2f + 0.9f;
+            
+            for (ServerPlayer otherPlayer : getNearbyPlayers(player)) {
+                if (otherPlayer != player && otherPlayer.distanceTo(player) < MULTIPLAYER_SYNC_RADIUS) {
+                    NetworkHandler.sendToPlayer(
+                            new PlaySoundPacket(
+                                    screamSound.getLocation(),
+                                    SoundSource.HOSTILE,
+                                    0.95f,
+                                    sharedPitch,
+                                    true,
+                                    true),
+                            otherPlayer);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Play reality warping sound effect for major events
+     */
+    public void playRealityWarp(ServerPlayer player) {
+        // Get the registered sound event
+        SoundEvent warpSound = SoundRegistry.REALITY_WARP.get();
+
+        // Play a reality warp with environmental sound properties
+        NetworkHandler.sendToPlayer(
+                new PlaySoundPacket(
+                        warpSound.getLocation(),
+                        SoundSource.AMBIENT,
+                        0.8f,
+                        1.0f,
+                        true,
+                        false), // Non-locational for better immersion
+                player);
+
+        // If multiplayer synchronization is enabled, also play for nearby players
+        if (shouldSyncMultiplayer()) {
+            for (ServerPlayer otherPlayer : getNearbyPlayers(player)) {
+                if (otherPlayer != player && otherPlayer.distanceTo(player) < MULTIPLAYER_SYNC_RADIUS) {
+                    NetworkHandler.sendToPlayer(
+                            new PlaySoundPacket(
+                                    warpSound.getLocation(),
+                                    SoundSource.AMBIENT,
+                                    0.8f,
+                                    1.0f,
+                                    true,
+                                    false),
+                            otherPlayer);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Play distant eerie music for atmospheric scenes
+     */
+    public void playDistantMusic(ServerPlayer player) {
+        // Get the registered sound event
+        SoundEvent musicSound = SoundRegistry.DISTANT_MUSIC.get();
+
+        // Play distant music with environmental sound properties
+        NetworkHandler.sendToPlayer(
+                new PlaySoundPacket(
+                        musicSound.getLocation(),
+                        SoundSource.MUSIC,
+                        0.6f, // Moderate volume to not overwhelm
+                        1.0f,
+                        false,
+                        true), // Locational to feel like it's coming from somewhere
+                player);
+
+        // If multiplayer synchronization is enabled, also play for nearby players
+        if (shouldSyncMultiplayer()) {
+            for (ServerPlayer otherPlayer : getNearbyPlayers(player)) {
+                if (otherPlayer != player && otherPlayer.distanceTo(player) < MULTIPLAYER_SYNC_RADIUS) {
+                    NetworkHandler.sendToPlayer(
+                            new PlaySoundPacket(
+                                    musicSound.getLocation(),
+                                    SoundSource.MUSIC,
+                                    0.6f,
+                                    1.0f,
+                                    false,
+                                    true),
+                            otherPlayer);
+                }
+            }
+        }
     }
 
     /**

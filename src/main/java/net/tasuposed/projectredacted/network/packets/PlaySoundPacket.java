@@ -21,13 +21,15 @@ public class PlaySoundPacket {
     private final float volume;
     private final float pitch;
     private final boolean distorted;
+    private final boolean locational;
     
-    public PlaySoundPacket(ResourceLocation sound, SoundSource source, float volume, float pitch, boolean distorted, boolean b) {
+    public PlaySoundPacket(ResourceLocation sound, SoundSource source, float volume, float pitch, boolean distorted, boolean locational) {
         this.sound = sound;
         this.source = source;
         this.volume = volume;
         this.pitch = pitch;
         this.distorted = distorted;
+        this.locational = locational;
     }
     
     public static void encode(PlaySoundPacket packet, FriendlyByteBuf buffer) {
@@ -36,6 +38,7 @@ public class PlaySoundPacket {
         buffer.writeFloat(packet.volume);
         buffer.writeFloat(packet.pitch);
         buffer.writeBoolean(packet.distorted);
+        buffer.writeBoolean(packet.locational);
     }
     
     public static PlaySoundPacket decode(FriendlyByteBuf buffer) {
@@ -44,7 +47,8 @@ public class PlaySoundPacket {
         float volume = buffer.readFloat();
         float pitch = buffer.readFloat();
         boolean distorted = buffer.readBoolean();
-        return new PlaySoundPacket(sound, source, volume, pitch, distorted, false);
+        boolean locational = buffer.readBoolean();
+        return new PlaySoundPacket(sound, source, volume, pitch, distorted, locational);
     }
     
     public static void handle(PlaySoundPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
@@ -55,17 +59,33 @@ public class PlaySoundPacket {
                 Minecraft minecraft = Minecraft.getInstance();
                 SoundEvent soundEvent = ForgeRegistries.SOUND_EVENTS.getValue(packet.sound);
                 
-                if (soundEvent != null) {
-                    minecraft.level.playLocalSound(
-                        minecraft.player.getX(),
-                        minecraft.player.getY(),
-                        minecraft.player.getZ(),
-                        soundEvent,
-                        packet.source,
-                        packet.volume,
-                        packet.pitch,
-                        false
-                    );
+                if (soundEvent != null && minecraft.player != null && minecraft.level != null) {
+                    if (packet.locational) {
+                        // Play at player's location
+                        minecraft.level.playLocalSound(
+                            minecraft.player.getX(),
+                            minecraft.player.getY(),
+                            minecraft.player.getZ(),
+                            soundEvent,
+                            packet.source,
+                            packet.volume,
+                            packet.pitch,
+                            false
+                        );
+                    } else {
+                        // Play as ambient sound (not location-based)
+                        // Use the master volume control for non-positional sound
+                        minecraft.level.playLocalSound(
+                            minecraft.player.getX(),
+                            minecraft.player.getY(), 
+                            minecraft.player.getZ(),
+                            soundEvent,
+                            packet.source,
+                            packet.volume,
+                            packet.pitch,
+                            true  // Set to true for ambient sound that doesn't attenuate with distance
+                        );
+                    }
                 }
             });
         });

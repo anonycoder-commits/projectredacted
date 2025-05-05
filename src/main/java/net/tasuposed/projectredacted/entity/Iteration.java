@@ -43,6 +43,10 @@ import net.minecraft.world.phys.Vec3;
 import net.tasuposed.projectredacted.horror.events.EntityEvent;
 import net.tasuposed.projectredacted.network.NetworkHandler;
 import net.tasuposed.projectredacted.network.packets.GlitchScreenPacket;
+import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * A mysterious entity that stalks players
@@ -97,9 +101,88 @@ public class Iteration extends Monster {
                 .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D); // Complete knockback immunity
     }
     
+    /**
+     * Create ambient particles and sounds for cinematic effect
+     */
+    private void createAmbientEffects() {
+        if (this.level().isClientSide()) {
+            return; // Server-side only
+        }
+
+        // Only do particle effects every few ticks for performance
+        if (this.tickCount % 5 != 0) {
+            return;
+        }
+
+        // Particles get more intense as the stalking phase increases
+        int particleCount = 1 + stalkingPhase * 2;
+        
+        for (int i = 0; i < particleCount; i++) {
+            // Random offset within entity bounds
+            double offsetX = (random.nextDouble() - 0.5) * this.getBbWidth();
+            double offsetY = random.nextDouble() * this.getBbHeight();
+            double offsetZ = (random.nextDouble() - 0.5) * this.getBbWidth();
+            
+            // Random velocity
+            double velX = (random.nextDouble() - 0.5) * 0.1;
+            double velY = random.nextDouble() * 0.1;
+            double velZ = (random.nextDouble() - 0.5) * 0.1;
+
+            // Create appropriate particles based on phase
+            if (stalkingPhase == 2) {
+                // Hunting phase: Dark smoke or flame particles
+                ((ServerLevel)level()).sendParticles(
+                    ParticleTypes.SMOKE,
+                    this.getX() + offsetX, 
+                    this.getY() + offsetY, 
+                    this.getZ() + offsetZ,
+                    1, // Single particle per call for better control
+                    velX, velY, velZ,
+                    0.01 // Speed factor
+                );
+            } else {
+                // Earlier phases: Subtle effect
+                ((ServerLevel)level()).sendParticles(
+                    ParticleTypes.ASH,
+                    this.getX() + offsetX, 
+                    this.getY() + offsetY, 
+                    this.getZ() + offsetZ,
+                    1,
+                    velX, velY, velZ,
+                    0.01
+                );
+            }
+        }
+        
+        // Random ambient sounds
+        if (random.nextFloat() < 0.01) { // 1% chance per tick
+            // Choose sound based on stalking phase
+            float pitch = 0.8F + (random.nextFloat() * 0.2F);
+            float volume = 0.2F + (stalkingPhase * 0.2F); // Gets louder in higher phases
+            
+            level().playSound(null, 
+                this.getX(), this.getY(), this.getZ(),
+                net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS.getValue(new ResourceLocation("minecraft:ambient_cave")), 
+                SoundSource.HOSTILE, 
+                volume, pitch);
+                
+            // Additional electronic distortion sound in hunting phase
+            if (stalkingPhase == 2 && random.nextFloat() < 0.3) {
+                level().playSound(null, 
+                    this.getX(), this.getY(), this.getZ(),
+                    net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS.getValue(new ResourceLocation("minecraft:block.amethyst_block.chime")), 
+                    SoundSource.HOSTILE, 
+                    0.5F, 0.5F + (random.nextFloat() * 0.5F));
+            }
+        }
+    }
+    
     @Override
     public void tick() {
         super.tick();
+        
+        // Create ambient particles and sounds
+        createAmbientEffects();
         
         // Consolidate all cooldown decrements in one pass
         if (teleportCooldown > 0) teleportCooldown--;
@@ -112,7 +195,7 @@ public class Iteration extends Monster {
         LivingEntity currentTarget = this.getTarget();
         if (currentTarget instanceof ServerPlayer player) {
             // Reset despawn timer as we're actively engaged with a player
-            despawnTimer = 400; // Restored to 20 seconds (was incorrectly reduced to 200)
+            despawnTimer = 400; // Restored to 20 seconds
             
             // We have targeted a player, start the kill attempt timer
             hasTargetedPlayer = true;
@@ -122,9 +205,35 @@ public class Iteration extends Monster {
                 killAttemptTimer--;
             }
             
-            // If kill attempt timer reaches zero, disappear
+            // If kill attempt timer reaches zero, disappear with a dramatic effect
             if (killAttemptTimer <= 0) {
                 LOGGER.debug("Iteration despawning due to failed kill attempt");
+                
+                // Create dramatic particle explosion before despawning
+                for (int i = 0; i < 50; i++) {
+                    double offsetX = (random.nextDouble() - 0.5) * 2;
+                    double offsetY = random.nextDouble() * 2;
+                    double offsetZ = (random.nextDouble() - 0.5) * 2;
+                    
+                    ((ServerLevel)level()).sendParticles(
+                        ParticleTypes.REVERSE_PORTAL,
+                        this.getX(), this.getY() + 1.0, this.getZ(),
+                        5, offsetX, offsetY, offsetZ, 0.1
+                    );
+                }
+                
+                // Play dramatic sound
+                level().playSound(null, this.getX(), this.getY(), this.getZ(),
+                    net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS.getValue(new ResourceLocation("minecraft:entity.enderman.teleport")), 
+                    SoundSource.HOSTILE, 
+                    1.0F, 0.5F);
+                
+                // Spawn lightning for dramatic effect (visual only, no damage)
+                LightningBolt lightningBolt = new LightningBolt(EntityType.LIGHTNING_BOLT, level());
+                lightningBolt.setPos(this.getX(), this.getY(), this.getZ());
+                lightningBolt.setVisualOnly(true);
+                level().addFreshEntity(lightningBolt);
+                
                 this.discard();
                 return;
             }
@@ -205,8 +314,6 @@ public class Iteration extends Monster {
                 // Transition to hunting phase with special effect
                 stalkingPhase = 2;
                 
-                player.sendSystemMessage(Component.literal("§4§l§kxxxx§r §4§lITERATION HUNTING PROTOCOL ACTIVE§r §4§l§kxxxx§r"));
-                
                 // Play hunting sound
                 this.level().playSound(null, this.getX(), this.getY(), this.getZ(), 
                         SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 1.0F, 0.5F);
@@ -227,8 +334,6 @@ public class Iteration extends Monster {
             if (stalkingPhase != 1) {
                 // Transition to aggressive phase
                 stalkingPhase = 1;
-                
-                player.sendSystemMessage(Component.literal("§5§lThe §4Iteration§5§l is becoming aggressive..."));
                 
                 // Add screen effect
                 NetworkHandler.sendToPlayer(
@@ -395,9 +500,6 @@ public class Iteration extends Monster {
         this.level().playSound(null, this.getX(), this.getY(), this.getZ(), 
                 SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 1.0F, 0.4F);
         
-        // Send the terrifying message
-        player.sendSystemMessage(Component.literal("§4§lT̶̢̝̓̋͑́̇͠h̶̙͗̿̽ę̴̝͕̹̬̖̇̃͝ ̵̢̻͔̜̹̈̓Į̸̢̖̬̹̀͋̉͐ţ̸̮͈̏̈́̓̉͒̀͝e̶̠̝̯̦̤̣̎̃r̶̩͍͑̈́a̴̡̹̲̬̹̱̍̏̀̑̍̓͜t̶̺͖̪̳̱͌͆̈̔i̶̜̼̹̙̰̇̽͛͗͠ỏ̸̮͔͔̱̘͙̞͜n̸̙̫̖͊̌̔͜ ̵̡͙͚̪̮̀̐͛̊́̂͝h̵̺̠̟̪̮̙̓͋̓̏̒̀͜ụ̷̱̃̒̽n̸̳̤̖̦̱̖̥͂̑̕ţ̶̟͈̲̬̲͈̄̊̋̎͊͠ŝ̶̗́ ̸̯̯͆͐̌̈͌̐̊y̶͕̐͂̎̈́̚͝ò̸̥̆̾̐̈́̽̔u̸̢̥͍̻̮͒̃̂̈́̑̽̍ ̵̼̮̙̣͎̖̋͂n̴̯̖̳̠̅̍̏̌̚ó̶̢̳͉̰̺̻̖͌̏͂̕͠w̴̢̦̗̙̻̐̌͠"));
-        
         // Severe screen effect
         NetworkHandler.sendToPlayer(
                 new GlitchScreenPacket(
@@ -418,7 +520,7 @@ public class Iteration extends Monster {
         // Schedule a stalking message after a delay
         player.getServer().tell(new net.minecraft.server.TickTask(
                 player.getServer().getTickCount() + 60, () -> {
-            player.sendSystemMessage(Component.literal("§4§oYou cannot escape..."));
+            // Message removed
         }));
     }
     
@@ -545,7 +647,7 @@ public class Iteration extends Monster {
                     // Send message based on stalking phase
                     if (source.getEntity() instanceof ServerPlayer player) {
                         if (stalkingPhase == 2) {
-                            player.sendSystemMessage(Component.literal("§4§lY̵̤̓ö̵̟́u̸̯̿ ̵̡̌c̸̣̿ạ̶̓ń̵͔n̵̦̐ǒ̴̦t̵̪̔ ̷͎̐k̸̘̚ḯ̸͕l̵̘̀l̶̥̎ ̸̳̒m̵̩͗ê̷̲..."));
+                            // Message removed
                         }
                     }
                     
@@ -644,9 +746,9 @@ public class Iteration extends Monster {
                 // This prevents message spam when being hit repeatedly
                 if (random.nextFloat() < 0.3f) {
                     switch (stalkingPhase) {
-                        case 0 -> player.sendSystemMessage(Component.literal("§7A cold chill runs down your spine..."));
+                        case 0 -> {} // No message
                         case 1 -> {} // No message in aggressive phase
-                        case 2 -> player.sendSystemMessage(Component.literal("§4§oT̶̬̎h̴̫̓e̶͔̔ ̴̜̊Ȟ̸̬ǘ̸̡n̸̮̐t̷̬̉ ̴̲̃i̸̘̓s̷̙̆ ̸̱̍ö̷̢n̷̬̄.̷̜̄.̴̨̇.̵̲̈́"));
+                        case 2 -> {} // No message
                     }
                 }
             }
@@ -816,7 +918,7 @@ public class Iteration extends Monster {
             
             // Notify nearby players with an ominous message if in hunting phase
             if (stalkingPhase == 2 && this.getTarget() instanceof ServerPlayer targetPlayer && random.nextFloat() < 0.3f) {
-                targetPlayer.sendSystemMessage(Component.literal("§4§oThe Iteration is breaking through..."));
+                // Message removed
             }
         }
     }

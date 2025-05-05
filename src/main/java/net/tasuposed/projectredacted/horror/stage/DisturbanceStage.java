@@ -65,7 +65,7 @@ public class DisturbanceStage implements HorrorStage {
                 break;
             case 1:
                 // Show mysterious message
-                serverPlayer.sendSystemMessage(Component.literal("§7You feel like you're being watched..."));
+                serverPlayer.sendSystemMessage(Component.literal("§7Proximity sensor triggered."));
                 
                 // Small chance to actually show a glimpse to reinforce the message
                 if (random.nextFloat() < 0.4f) {

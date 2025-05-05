@@ -33,6 +33,7 @@ import net.tasuposed.projectredacted.network.NetworkHandler;
 import net.tasuposed.projectredacted.sound.SoundRegistry;
 import net.tasuposed.projectredacted.world.DimensionRegistry;
 import net.tasuposed.projectredacted.world.TheVoidPortalHandler;
+import net.tasuposed.projectredacted.horror.events.EndgameSequence;
 
 // The value here should match an entry in the META-INF/mods.toml file
 @Mod(ProjectRedacted.MODID)
@@ -86,6 +87,9 @@ public class ProjectRedacted
         
         // Register the network system for client-server communication
         event.enqueueWork(NetworkHandler::registerPackets);
+        
+        // Initialize the endgame sequence handler
+        EndgameSequence.getInstance();
     }
 
     // Add the example block item to the building blocks tab
@@ -94,14 +98,21 @@ public class ProjectRedacted
         // No items to add to creative tabs
     }
 
-    // You can use SubscribeEvent and let the Event Bus discover methods to call
+    /**
+     * Server starting event handler
+     */
     @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event)
-    {
-        LOGGER.info("Project REDACTED active on server");
+    public void onServerStarting(ServerStartingEvent event) {
+        // Server startup logic
+        LOGGER.info("Project REDACTED server initializing");
         
-        // Load saved horror data
+        // Load horror state data when the server starts
         HorrorManager.getInstance().loadAllPlayerStates(event.getServer());
+        
+        // Load endgame world erased state
+        EndgameSequence.getInstance().loadWorldErasedState(event.getServer());
+        
+        // Any other server-side initialization
     }
     
     @SubscribeEvent

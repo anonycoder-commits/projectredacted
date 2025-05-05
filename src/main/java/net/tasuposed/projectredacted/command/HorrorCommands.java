@@ -43,6 +43,7 @@ import net.tasuposed.projectredacted.horror.HorrorManager;
 import net.tasuposed.projectredacted.horror.HorrorStructureSpawner;
 import net.tasuposed.projectredacted.horror.PlayerHorrorState;
 import net.tasuposed.projectredacted.horror.events.EntityEvent;
+import net.tasuposed.projectredacted.horror.events.EndgameSequence;
 import net.tasuposed.projectredacted.horror.events.HorrorSoundEvent;
 import net.tasuposed.projectredacted.horror.stage.DisturbanceStage;
 import net.tasuposed.projectredacted.horror.stage.FinalStage;
@@ -72,6 +73,9 @@ public class HorrorCommands {
     private static final String WHISPER = "whisper";
     private static final String HEARTBEAT = "heartbeat";
     private static final String GROWL = "growl";
+    private static final String SCREAM = "scream";
+    private static final String REALITY_WARP = "reality_warp";
+    private static final String DISTANT_MUSIC = "music";
     
     // Entity type constants
     private static final String ITERATION = "iteration";
@@ -244,9 +248,7 @@ public class HorrorCommands {
             .then(Commands.literal("obvious").executes(context -> runStageEvent(context.getSource(), new ObviousStage())))
             .then(Commands.literal("meta").executes(context -> runStageEvent(context.getSource(), new MetaStage())))
             .then(Commands.literal("final").executes(context -> runStageEvent(context.getSource(), new FinalStage())))
-            .then(Commands.literal("set")
-                .then(Commands.argument("stage", IntegerArgumentType.integer(0, 4))
-                    .executes(context -> setPlayerStage(context.getSource(), IntegerArgumentType.getInteger(context, "stage")))));
+            .then(Commands.literal("endgame").executes(context -> triggerEndgameSequence(context.getSource())));
         
         // Screen effects command
         LiteralArgumentBuilder<CommandSourceStack> effectCommand = Commands.literal("effect")
@@ -262,7 +264,10 @@ public class HorrorCommands {
             .then(Commands.literal("ambience").executes(context -> playHorrorSound(context.getSource(), AMBIENCE)))
             .then(Commands.literal("whisper").executes(context -> playHorrorSound(context.getSource(), WHISPER)))
             .then(Commands.literal("heartbeat").executes(context -> playHorrorSound(context.getSource(), HEARTBEAT)))
-            .then(Commands.literal("growl").executes(context -> playHorrorSound(context.getSource(), GROWL)));
+            .then(Commands.literal("growl").executes(context -> playHorrorSound(context.getSource(), GROWL)))
+            .then(Commands.literal("scream").executes(context -> playHorrorSound(context.getSource(), SCREAM)))
+            .then(Commands.literal("reality_warp").executes(context -> playHorrorSound(context.getSource(), REALITY_WARP)))
+            .then(Commands.literal("music").executes(context -> playHorrorSound(context.getSource(), DISTANT_MUSIC)));
         
         // Entity command
         LiteralArgumentBuilder<CommandSourceStack> entityCommand = Commands.literal("entity")
@@ -298,8 +303,6 @@ public class HorrorCommands {
             .then(soundCommand)
             .then(entityCommand)
             .then(metaCommand)
-            .then(Commands.literal("reset")
-                .executes(context -> resetPlayerState(context.getSource())))
             .then(Commands.literal("spawn_structure")
                 .requires(source -> source.hasPermission(2))
                 .executes(context -> spawnTestStructure(context.getSource(), -1))
@@ -313,6 +316,24 @@ public class HorrorCommands {
                 .executes(context -> escapeVoidDimension(context.getSource())));
         
         dispatcher.register(rootCommand);
+        
+        // Add command to trigger the endgame sequence
+        dispatcher.register(Commands.literal("debug_endgame")
+            .requires(source -> source.hasPermission(Commands.LEVEL_ADMINS))
+            .executes(context -> {
+                ServerPlayer player = context.getSource().getPlayerOrException();
+                context.getSource().sendSuccess(() -> Component.literal("Triggering endgame sequence..."), true);
+                
+                // Trigger the endgame sequence
+                EndgameSequence.getInstance().startEndgameSequence(player);
+                
+                return Command.SINGLE_SUCCESS;
+            }));
+            
+        // Add a simpler direct command to trigger endgame sequence
+        dispatcher.register(Commands.literal("endgame")
+            .requires(source -> source.hasPermission(2)) // Require op level 2
+            .executes(context -> triggerEndgameSequence(context.getSource())));
     }
     
     /**
@@ -477,6 +498,12 @@ public class HorrorCommands {
         try {
             // Try to get the player who executed the command
             if (source.getEntity() instanceof ServerPlayer player) {
+                // Special handling for FinalStage - check if it's directly from the command
+                if (stage instanceof FinalStage finalStage) {
+                    // Force the FinalStage to trigger endgame on next event with high probability
+                    finalStage.setEndgameTriggered(true);
+                }
+                
                 stage.triggerRandomEvent(player);
                 source.sendSuccess(() -> Component.literal("§aTriggered " + stage.getClass().getSimpleName() + 
                     " for you"), true);
@@ -490,6 +517,27 @@ public class HorrorCommands {
             return 0;
         }
         return 1;
+    }
+    
+    /**
+     * Directly trigger the endgame sequence
+     */
+    private static int triggerEndgameSequence(CommandSourceStack source) {
+        try {
+            // Must be executed as player
+            if (source.getEntity() instanceof ServerPlayer player) {
+                EndgameSequence.getInstance().startEndgameSequence(player);
+                source.sendSuccess(() -> Component.literal("§aTriggered endgame sequence"), true);
+                return 1;
+            } else {
+                source.sendFailure(Component.literal("§cMust execute as player"));
+                return 0;
+            }
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("§cError: " + e.getMessage()));
+            LOGGER.error("Error triggering endgame sequence", e);
+            return 0;
+        }
     }
     
     /**
@@ -533,6 +581,75 @@ public class HorrorCommands {
     }
     
     /**
+     * Play a horror sound to specific players
+     */
+    private static int playSoundEffect(CommandSourceStack source, String soundType, Collection<ServerPlayer> players) {
+        try {
+            // Create sound event handler
+            HorrorSoundEvent soundEvent = new HorrorSoundEvent();
+            
+            // If players specified, apply to them
+            if (players != null && !players.isEmpty()) {
+                for (ServerPlayer player : players) {
+                    applySound(soundEvent, player, soundType);
+                    source.sendSuccess(() -> Component.literal("§aPlayed sound " + soundType + 
+                        " to " + player.getName().getString()), true);
+                }
+            } else {
+                // Try to get the player who executed the command
+                if (source.getEntity() instanceof ServerPlayer player) {
+                    applySound(soundEvent, player, soundType);
+                    source.sendSuccess(() -> Component.literal("§aPlayed sound " + soundType + " to you"), true);
+                } else {
+                    source.sendFailure(Component.literal("§cMust specify players or execute as player"));
+                    return 0;
+                }
+            }
+            
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("§cError playing sound: " + e.getMessage()));
+            return 0;
+        }
+    }
+    
+    /**
+     * Apply the appropriate sound based on the sound type
+     */
+    private static void applySound(HorrorSoundEvent soundEvent, ServerPlayer player, String soundType) {
+        switch (soundType) {
+            case AMBIENCE:
+                // Play ambient cave sound
+                player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                        SoundEvents.AMBIENT_CAVE.value(), SoundSource.AMBIENT, 1.0f, 1.0f);
+                break;
+            case WHISPER:
+                soundEvent.playWhisper(player);
+                break;
+            case HEARTBEAT:
+                soundEvent.playHeartbeat(player);
+                break;
+            case GROWL:
+                soundEvent.playGrowl(player);
+                break;
+            case SCREAM:
+                soundEvent.playScream(player);
+                break;
+            case REALITY_WARP:
+                soundEvent.playRealityWarp(player);
+                break;
+            case DISTANT_MUSIC:
+                soundEvent.playDistantMusic(player);
+                break;
+            default:
+                // Play a default sound for unknown types
+                player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                        SoundEvents.AMBIENT_CAVE.value(), SoundSource.AMBIENT, 1.0f, 1.0f);
+                break;
+        }
+    }
+    
+    /**
      * Spawn a horror entity
      */
     private static int spawnEntity(CommandSourceStack source, String entityType) {
@@ -541,317 +658,106 @@ public class HorrorCommands {
             return 0;
         }
         
-        ServerPlayer player = (ServerPlayer) source.getEntity();
-        ServerLevel level = player.serverLevel();
-        
-        // Spawn position - in front of the player
-        Vec3 lookVec = player.getLookAngle();
-        double x = player.getX() + lookVec.x * 5;
-        double y = player.getY();
-        double z = player.getZ() + lookVec.z * 5;
-        
-        // Identify the entity type and spawn it
-        boolean success = false;
-        
-        switch(entityType) {
-            case ITERATION:
-                Iteration iteration = EntityRegistry.ITERATION.get().create(level);
-                if (iteration != null) {
-                    iteration.moveTo(x, y, z, 0, 0);
-                    level.addFreshEntity(iteration);
-                    success = true;
-                }
-                break;
-                
-            case PROTOCOL_37:
-                Protocol_37 protocol37 = EntityRegistry.PROTOCOL_37.get().create(level);
-                if (protocol37 != null) {
-                    protocol37.moveTo(x, y, z, 0, 0);
-                    level.addFreshEntity(protocol37);
-                    success = true;
-                }
-                break;
-                
-            case INVISIBLE_PROTOCOL_37:
-                InvisibleProtocol37 invisProto = EntityRegistry.INVISIBLE_PROTOCOL_37.get().create(level);
-                if (invisProto != null) {
-                    invisProto.moveTo(x, y, z, 0, 0);
-                    invisProto.setInvisible(true); // Ensure it's invisible immediately
-                    level.addFreshEntity(invisProto);
-                    
-                    // Add particle effect to indicate where the invisible entity spawned
-                    level.sendParticles(
-                        net.minecraft.core.particles.ParticleTypes.SMOKE,
-                        x, y + 1, z,
-                        20, 0.5, 0.5, 0.5, 0.02
-                    );
-                    success = true;
-                }
-                break;
-                
-            case DISTANT_STALKER:
-                DistantStalker stalker = EntityRegistry.DISTANT_STALKER.get().create(level);
-                if (stalker != null) {
-                    stalker.moveTo(x, y, z, 0, 0);
-                    level.addFreshEntity(stalker);
-                    success = true;
-                }
-                break;
-                
-            case MINING_ENTITY:
-                MiningEntity miner = EntityRegistry.MINING_ENTITY.get().create(level);
-                if (miner != null) {
-                    miner.moveTo(x, y, z, 0, 0);
-                    level.addFreshEntity(miner);
-                    success = true;
-                }
-                break;
-                
-            case ANGRY_PROTOCOL_37:
-                AngryProtocol37 angryProto = EntityRegistry.ANGRY_PROTOCOL_37.get().create(level);
-                if (angryProto != null) {
-                    angryProto.moveTo(x, y, z, 0, 0);
-                    angryProto.setGlowingTag(true); // Ensure glowing effect immediately
-                    level.addFreshEntity(angryProto);
-                    
-                    // Add sound effect for the angry form spawning
-                    level.playSound(null, 
-                        new BlockPos((int)x, (int)y, (int)z), 
-                        SoundEvents.ENDERMAN_STARE, 
-                        SoundSource.HOSTILE, 
-                        1.0F, 0.5F
-                    );
-                    success = true;
-                }
-                break;
-        }
-        
-        if (success) {
-            source.sendSuccess(() -> Component.literal("§aSpawned " + entityType + " entity"), true);
-            return 1;
-        } else {
-            source.sendFailure(Component.literal("Failed to spawn " + entityType));
-            return 0;
-        }
-    }
-    
-    /**
-     * Play a sound effect
-     */
-    private static int playSoundEffect(CommandSourceStack source, String soundType, Collection<ServerPlayer> players) {
         try {
-            HorrorSoundEvent soundEvent = new HorrorSoundEvent();
+            ServerPlayer player = (ServerPlayer) source.getEntity();
+            ServerLevel level = player.serverLevel();
             
-            // If players specified, apply to them
-            if (players != null && !players.isEmpty()) {
-                for (ServerPlayer player : players) {
-                    applySoundToPlayer(soundEvent, soundType, player);
-                    source.sendSuccess(() -> Component.literal("§aPlayed " + soundType + " sound to " + 
-                        player.getName().getString()), true);
-                }
+            // Spawn position - in front of the player
+            Vec3 lookVec = player.getLookAngle();
+            double x = player.getX() + lookVec.x * 5;
+            double y = player.getY();
+            double z = player.getZ() + lookVec.z * 5;
+            
+            // Identify the entity type and spawn it
+            boolean success = false;
+            
+            switch(entityType) {
+                case ITERATION:
+                    Iteration iteration = EntityRegistry.ITERATION.get().create(level);
+                    if (iteration != null) {
+                        iteration.moveTo(x, y, z, 0, 0);
+                        level.addFreshEntity(iteration);
+                        success = true;
+                    }
+                    break;
+                    
+                case PROTOCOL_37:
+                    Protocol_37 protocol37 = EntityRegistry.PROTOCOL_37.get().create(level);
+                    if (protocol37 != null) {
+                        protocol37.moveTo(x, y, z, 0, 0);
+                        level.addFreshEntity(protocol37);
+                        success = true;
+                    }
+                    break;
+                    
+                case INVISIBLE_PROTOCOL_37:
+                    InvisibleProtocol37 invisProto = EntityRegistry.INVISIBLE_PROTOCOL_37.get().create(level);
+                    if (invisProto != null) {
+                        invisProto.moveTo(x, y, z, 0, 0);
+                        invisProto.setInvisible(true); // Ensure it's invisible immediately
+                        level.addFreshEntity(invisProto);
+                        
+                        // Add particle effect to indicate where the invisible entity spawned
+                        level.sendParticles(
+                            net.minecraft.core.particles.ParticleTypes.SMOKE,
+                            x, y + 1, z,
+                            20, 0.5, 0.5, 0.5, 0.02
+                        );
+                        success = true;
+                    }
+                    break;
+                    
+                case DISTANT_STALKER:
+                    DistantStalker stalker = EntityRegistry.DISTANT_STALKER.get().create(level);
+                    if (stalker != null) {
+                        stalker.moveTo(x, y, z, 0, 0);
+                        level.addFreshEntity(stalker);
+                        success = true;
+                    }
+                    break;
+                    
+                case MINING_ENTITY:
+                    MiningEntity miner = EntityRegistry.MINING_ENTITY.get().create(level);
+                    if (miner != null) {
+                        miner.moveTo(x, y, z, 0, 0);
+                        level.addFreshEntity(miner);
+                        success = true;
+                    }
+                    break;
+                    
+                case ANGRY_PROTOCOL_37:
+                    AngryProtocol37 angryProto = EntityRegistry.ANGRY_PROTOCOL_37.get().create(level);
+                    if (angryProto != null) {
+                        angryProto.moveTo(x, y, z, 0, 0);
+                        angryProto.setGlowingTag(true); // Ensure glowing effect immediately
+                        level.addFreshEntity(angryProto);
+                        
+                        // Add sound effect for the angry form spawning
+                        level.playSound(null, 
+                            new BlockPos((int)x, (int)y, (int)z), 
+                            SoundEvents.ENDERMAN_STARE, 
+                            SoundSource.HOSTILE, 
+                            1.0F, 0.5F
+                        );
+                        success = true;
+                    }
+                    break;
+            }
+            
+            if (success) {
+                source.sendSuccess(() -> Component.literal("§aSpawned " + entityType + " entity"), true);
+                return 1;
             } else {
-                // Try to get the player who executed the command
-                if (source.getEntity() instanceof ServerPlayer player) {
-                    applySoundToPlayer(soundEvent, soundType, player);
-                    source.sendSuccess(() -> Component.literal("§aPlayed " + soundType + " sound to you"), true);
-                } else {
-                    source.sendFailure(Component.literal("§cMust specify players or execute as player"));
-                    return 0;
-                }
+                source.sendFailure(Component.literal("Failed to spawn " + entityType));
+                return 0;
             }
-            
-            return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("§cError playing sound effect: " + e.getMessage()));
+            LOGGER.error("Error spawning entity", e);
+            source.sendFailure(Component.literal("Error spawning entity: " + e.getMessage()));
             return 0;
         }
     }
     
-    /**
-     * Apply a sound to a player
-     */
-    private static void applySoundToPlayer(HorrorSoundEvent soundEvent, String soundType, ServerPlayer player) {
-        switch (soundType) {
-            case WHISPER:
-                soundEvent.playWhisper(player);
-                break;
-            case AMBIENCE:
-                soundEvent.playDistantSound(player);
-                break;
-            case HEARTBEAT:
-                soundEvent.playHeartbeat(player);
-                break;
-            case GROWL:
-                soundEvent.playGrowl(player);
-                break;
-            default:
-                // Handle any other sound types that might be added in the future
-                LOGGER.warn("Unknown sound type: {}", soundType);
-                break;
-        }
-    }
-    
-    /**
-     * Trigger an entity effect
-     */
-    private static int triggerEntityEffect(CommandSourceStack source, String effectType, 
-            Collection<ServerPlayer> players) {
-        try {
-            EntityEvent entityEvent = new EntityEvent();
-            
-            // If players specified, apply to them
-            if (players != null && !players.isEmpty()) {
-                for (ServerPlayer player : players) {
-                    applyEntityEffectToPlayer(entityEvent, effectType, player);
-                    source.sendSuccess(() -> Component.literal("§aApplied " + effectType + " entity effect to " + 
-                        player.getName().getString()), true);
-                }
-            } else {
-                // Try to get the player who executed the command
-                if (source.getEntity() instanceof ServerPlayer player) {
-                    applyEntityEffectToPlayer(entityEvent, effectType, player);
-                    source.sendSuccess(() -> Component.literal("§aApplied " + effectType + " entity effect to you"), true);
-                } else {
-                    source.sendFailure(Component.literal("§cMust specify players or execute as player"));
-                    return 0;
-                }
-            }
-            
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("§cError triggering entity effect: " + e.getMessage()));
-            return 0;
-        }
-    }
-    
-    /**
-     * Apply an entity effect to a player
-     */
-    private static void applyEntityEffectToPlayer(EntityEvent entityEvent, String effectType, ServerPlayer player) {
-        switch (effectType) {
-            case "shadow":
-                entityEvent.spawnTemporaryShadowFigure(player);
-                break;
-            case "glimpse":
-                entityEvent.spawnIterationGlimpse(player);
-                break;
-            case "protocol37":
-                entityEvent.spawnDistantProtocol37(player);
-                break;
-        }
-    }
-    
-    /**
-     * Set a player's horror event frequency
-     */
-    private static int setPlayerFrequency(CommandSourceStack source, float frequency) {
-        if (!(source.getEntity() instanceof Player player)) {
-            source.sendFailure(Component.literal("§cThis command can only be used by players."));
-            return 0;
-        }
-        
-        // Get the player's horror state and update frequency
-        HorrorManager manager = HorrorManager.getInstance();
-        PlayerHorrorState state = manager.getPlayerState(player);
-        state.setFrequencyModifier(frequency);
-        
-        // Notify the player
-        String formattedPercent = String.format("%.0f", frequency * 100);
-        if (frequency <= 0.0f) {
-            source.sendSuccess(() -> Component.literal("§aHorror events §4disabled§a for you."), false);
-        } else if (frequency < 1.0f) {
-            source.sendSuccess(() -> Component.literal("§aHorror event frequency set to §6" + formattedPercent + "%§a of normal."), false);
-        } else if (frequency == 1.0f) {
-            source.sendSuccess(() -> Component.literal("§aHorror event frequency set to §6normal§a."), false);
-        } else {
-            source.sendSuccess(() -> Component.literal("§aHorror event frequency set to §c" + formattedPercent + "%§a of normal. §cSpooky!"), false);
-        }
-        
-        return 1;
-    }
-    
-    /**
-     * Show a player's current horror event frequency
-     */
-    private static int showPlayerFrequency(CommandSourceStack source) {
-        if (!(source.getEntity() instanceof Player player)) {
-            source.sendFailure(Component.literal("§cThis command can only be used by players."));
-            return 0;
-        }
-        
-        // Get the player's horror state
-        HorrorManager manager = HorrorManager.getInstance();
-        PlayerHorrorState state = manager.getPlayerState(player);
-        float frequency = state.getFrequencyModifier();
-        
-        // Show current setting
-        String formattedPercent = String.format("%.0f", frequency * 100);
-        if (frequency <= 0.0f) {
-            source.sendSuccess(() -> Component.literal("§aYour horror events are currently §4disabled§a."), false);
-        } else if (frequency < 1.0f) {
-            source.sendSuccess(() -> Component.literal("§aYour horror event frequency is set to §6" + formattedPercent + "%§a of normal."), false);
-        } else if (frequency == 1.0f) {
-            source.sendSuccess(() -> Component.literal("§aYour horror event frequency is set to §6normal§a."), false);
-        } else {
-            source.sendSuccess(() -> Component.literal("§aYour horror event frequency is set to §c" + formattedPercent + "%§a of normal."), false);
-        }
-        
-        return 1;
-    }
-
-    private static int setPlayerStage(CommandSourceStack source, int stageNumber) {
-        if (source.getEntity() instanceof ServerPlayer player) {
-            PlayerHorrorState playerState = HorrorManager.getInstance().getPlayerState(player);
-            
-            String stageName;
-            switch (stageNumber) {
-                case 0:
-                    stageName = "Subtle";
-                    break;
-                case 1:
-                    stageName = "Disturbance";
-                    break;
-                case 2:
-                    stageName = "Obvious";
-                    break;
-                case 3:
-                    stageName = "Meta";
-                    break;
-                case 4:
-                    stageName = "Final";
-                    break;
-                default:
-                    stageName = "Unknown";
-                    break;
-            }
-            
-            playerState.setCurrentStage(stageNumber);
-            playerState.setLastStageAdvance(System.currentTimeMillis());
-            
-            source.sendSuccess(() -> Component.literal("Set horror stage to " + stageName + " (Stage " + stageNumber + ")"), true);
-            return Command.SINGLE_SUCCESS;
-        }
-        
-        source.sendFailure(Component.literal("Command must be executed by a player"));
-        return 0;
-    }
-
-    /**
-     * Reset a player's horror state to initial values
-     */
-    private static int resetPlayerState(CommandSourceStack source) {
-        if (source.getEntity() instanceof ServerPlayer player) {
-            PlayerHorrorState playerState = HorrorManager.getInstance().getPlayerState(player);
-            playerState.reset();
-            
-            source.sendSuccess(() -> Component.literal("§aReset horror state to initial values. You are now at Subtle Stage (Stage 0)."), true);
-            return Command.SINGLE_SUCCESS;
-        }
-        
-        source.sendFailure(Component.literal("§cCommand must be executed by a player"));
-        return 0;
-    }
-
     /**
      * Trigger a meta horror effect for testing
      */
@@ -1025,44 +931,59 @@ public class HorrorCommands {
             return 0;
         }
         
-        ServerPlayer player = (ServerPlayer) source.getEntity();
-        ServerLevel level = player.serverLevel();
-        
-        // Count of successful spawns
-        int spawnCount = 0;
-        
-        // Choose what to spawn based on entity type
-        if (ITERATION.equals(entityType)) {
-            // Spawn just iteration
-            spawnCount = attemptNaturalSpawn(level, player, EntityRegistry.ITERATION.get(), "Iteration");
-        } else if (PROTOCOL_37.equals(entityType)) {
-            // Spawn just protocol37
-            spawnCount = attemptNaturalSpawn(level, player, EntityRegistry.PROTOCOL_37.get(), "Protocol_37");
-        } else if (INVISIBLE_PROTOCOL_37.equals(entityType)) {
-            // Spawn invisible protocol37
-            spawnCount = attemptNaturalSpawn(level, player, EntityRegistry.INVISIBLE_PROTOCOL_37.get(), "InvisibleProtocol37");
-        } else if (DISTANT_STALKER.equals(entityType)) {
-            // Spawn distant stalker
-            spawnCount = attemptNaturalSpawn(level, player, EntityRegistry.DISTANT_STALKER.get(), "DistantStalker");
-        } else if (MINING_ENTITY.equals(entityType)) {
-            // Spawn mining entity
-            spawnCount = attemptNaturalSpawn(level, player, EntityRegistry.MINING_ENTITY.get(), "MiningEntity");
-        } else if (ANGRY_PROTOCOL_37.equals(entityType)) {
-            // Spawn angry protocol37
-            spawnCount = attemptNaturalSpawn(level, player, EntityRegistry.ANGRY_PROTOCOL_37.get(), "AngryProtocol37");
-        }
-        
-        // Save the final spawn count for use in lambda
-        final int finalSpawnCount = spawnCount;
-        
-        // Report results
-        if (finalSpawnCount > 0) {
-            source.sendSuccess(() -> Component.literal("§aSuccessfully spawned §6" + finalSpawnCount + "§a " + entityType + " entities"), true);
-            return finalSpawnCount;
-        } else {
-            // If we couldn't find spawn locations, spawn directly near the player instead
-            source.sendSuccess(() -> Component.literal("§eCouldn't find natural spawn locations, spawning near player instead"), false);
-            return spawnEntity(source, entityType);
+        try {
+            ServerPlayer player = (ServerPlayer) source.getEntity();
+            ServerLevel level = player.serverLevel();
+            
+            // Count of successful spawns
+            int spawnCount = 0;
+            
+            // Cache entity types to reduce lookup costs
+            EntityType<?> entityTypeToSpawn = null;
+            String entityName = "";
+            
+            // Choose what to spawn based on entity type
+            if (ITERATION.equals(entityType)) {
+                entityTypeToSpawn = EntityRegistry.ITERATION.get();
+                entityName = "Iteration";
+            } else if (PROTOCOL_37.equals(entityType)) {
+                entityTypeToSpawn = EntityRegistry.PROTOCOL_37.get();
+                entityName = "Protocol_37";
+            } else if (INVISIBLE_PROTOCOL_37.equals(entityType)) {
+                entityTypeToSpawn = EntityRegistry.INVISIBLE_PROTOCOL_37.get();
+                entityName = "InvisibleProtocol37";
+            } else if (DISTANT_STALKER.equals(entityType)) {
+                entityTypeToSpawn = EntityRegistry.DISTANT_STALKER.get();
+                entityName = "DistantStalker";
+            } else if (MINING_ENTITY.equals(entityType)) {
+                entityTypeToSpawn = EntityRegistry.MINING_ENTITY.get();
+                entityName = "MiningEntity";
+            } else if (ANGRY_PROTOCOL_37.equals(entityType)) {
+                entityTypeToSpawn = EntityRegistry.ANGRY_PROTOCOL_37.get();
+                entityName = "AngryProtocol37";
+            }
+            
+            // If we have a valid entity type, try to spawn it
+            if (entityTypeToSpawn != null) {
+                spawnCount = attemptNaturalSpawn(level, player, entityTypeToSpawn, entityName);
+            }
+            
+            // Save the final spawn count for use in lambda
+            final int finalSpawnCount = spawnCount;
+            
+            // Report results
+            if (finalSpawnCount > 0) {
+                source.sendSuccess(() -> Component.literal("§aSuccessfully spawned §6" + finalSpawnCount + "§a " + entityType + " entities"), true);
+                return finalSpawnCount;
+            } else {
+                // If we couldn't find spawn locations, spawn directly near the player instead
+                source.sendSuccess(() -> Component.literal("§eCouldn't find natural spawn locations, spawning near player instead"), false);
+                return spawnEntity(source, entityType);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error in natural entity spawning", e);
+            source.sendFailure(Component.literal("Error: " + e.getMessage()));
+            return 0;
         }
     }
     
@@ -1073,8 +994,14 @@ public class HorrorCommands {
         int spawnCount = 0;
         Random random = new Random();
         
+        // Calculate player position once
+        BlockPos playerPos = player.blockPosition();
+        int playerX = playerPos.getX();
+        int playerY = playerPos.getY();
+        int playerZ = playerPos.getZ();
+        
         // Make multiple attempts to find valid spawn locations
-        for (int attempt = 0; attempt < 30; attempt++) {
+        for (int attempt = 0; attempt < 30 && spawnCount == 0; attempt++) {
             // Calculate a randomized position
             double distance = 20.0 + random.nextDouble() * 60.0; // Between 20-80 blocks away
             double angle = random.nextDouble() * Math.PI * 2.0;
@@ -1082,13 +1009,12 @@ public class HorrorCommands {
             double offsetZ = Math.cos(angle) * distance;
             
             // Player position as starting point
-            BlockPos playerPos = player.blockPosition();
-            int x = playerPos.getX() + (int)offsetX;
-            int z = playerPos.getZ() + (int)offsetZ;
+            int x = playerX + (int)offsetX;
+            int z = playerZ + (int)offsetZ;
             
             // Try various Y positions
-            for (int yOffset = -10; yOffset <= 10; yOffset += 2) {
-                int y = playerPos.getY() + yOffset;
+            for (int yOffset = -10; yOffset <= 10 && spawnCount == 0; yOffset += 2) {
+                int y = playerY + yOffset;
                 
                 // Don't go below bedrock
                 if (y < 1) continue;
@@ -1106,17 +1032,17 @@ public class HorrorCommands {
                     }
                     
                     // Try to spawn
-                    if (entityType.spawn(level, spawnPos, MobSpawnType.COMMAND) != null) {
-                        spawnCount++;
-                        LOGGER.debug("Successfully naturally spawned {} at {}", entityName, spawnPos);
-                        break; // Break from y-loop after successful spawn
+                    try {
+                        if (entityType.spawn(level, spawnPos, MobSpawnType.COMMAND) != null) {
+                            spawnCount++;
+                            LOGGER.debug("Successfully naturally spawned {} at {}", entityName, spawnPos);
+                            break; // Break from y-loop after successful spawn
+                        }
+                    } catch (Exception e) {
+                        LOGGER.error("Error spawning {} at {}: {}", entityName, spawnPos, e.getMessage());
+                        // Continue trying other positions
                     }
                 }
-            }
-            
-            // Stop after spawning one entity successfully
-            if (spawnCount > 0) {
-                break;
             }
         }
         
@@ -1177,6 +1103,21 @@ public class HorrorCommands {
     private static int escapeVoidDimension(CommandSourceStack source) {
         if (!(source.getEntity() instanceof ServerPlayer player)) {
             source.sendFailure(Component.literal("§cThis command must be run by a player"));
+            return 0;
+        }
+        
+        // Check if world has been erased - if so, prevent return
+        if (EndgameSequence.getInstance().isWorldErased()) {
+            source.sendFailure(Component.literal("§cThere is nowhere to return to. The world has been erased."));
+            
+            // Apply a disturbing effect to reinforce the message
+            NetworkHandler.sendToPlayer(
+                    new GlitchScreenPacket(
+                            2, // EFFECT_CORRUPT
+                            0.9f,
+                            40), // 2 seconds
+                    player);
+            
             return 0;
         }
         

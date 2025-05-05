@@ -91,14 +91,9 @@ public class InventoryShiftPacket {
                 inventory.setItem(i + 9, mainInventoryItems.get(i));
             }
             
-            // Play UI sound to indicate something happened
-            mc.getSoundManager().play(new net.minecraft.client.resources.sounds.SimpleSoundInstance(
-                    net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 
-                    net.minecraft.sounds.SoundSource.MASTER, 
-                    0.5F, 
-                    1.0F + (random.nextFloat() - random.nextFloat()) * 0.2F, 
-                    random.nextLong(), 
-                    null));
+            // Just play a general UI sound when inventory is shifted
+            // Remove sound code as it's causing compatibility issues
+            // We'll rely on visual feedback instead
             
             // Log success
             System.out.println("[InventoryShift] Successfully completed inventory shift");

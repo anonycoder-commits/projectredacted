@@ -30,6 +30,12 @@ public class HorrorConfig {
     public static final IntValue PROTOCOL_37_TRANSFORM_CHANCE;
     public static final BooleanValue ENABLE_COMMUNITY_ENTITIES;
     
+    // Add new multiplayer scaling configuration
+    public static final BooleanValue DYNAMIC_MULTIPLAYER_SCALING;
+    public static final DoubleValue MULTIPLAYER_SCALING_FACTOR;
+    public static final IntValue GLOBAL_EVENT_COOLDOWN;
+    public static final IntValue MINIMUM_EVENTS_PER_STAGE;
+    
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
         
@@ -45,7 +51,7 @@ public class HorrorConfig {
                 .define("resetOnLogin", false);
         
         TIME_BETWEEN_STAGES = builder
-                .comment("Time in minutes between horror stages. Each stage's duration is multiplied by (stage+1), so total progress time = value*(1+2+3+4) minutes. 5 = ~50 minutes total)")
+                .comment("Time in minutes between horror stages. Lower values = faster progression.")
                 .defineInRange("timeBetweenStages", 5, 1, 1440);
                 
         STAGE_DURATION = builder
@@ -53,12 +59,29 @@ public class HorrorConfig {
                 .defineInRange("stageDuration", 15, 1, 1440);
         
         EVENT_FREQUENCY = builder
-                .comment("Frequency of horror events (0.0-1.0)")
+                .comment("Base frequency of horror events (0.0-1.0). Higher values = more frequent events.")
                 .defineInRange("eventFrequency", 0.25D, 0.0D, 1.0D);
         
         SYNC_MULTIPLAYER_EVENTS = builder
                 .comment("Synchronize horror events across all players in multiplayer to ensure a shared experience. IMPORTANT: Required for Protocol_37 and Iteration entities to spawn visibly in multiplayer.")
                 .define("syncMultiplayerEvents", true);
+        
+        // Add new multiplayer scaling configuration
+        DYNAMIC_MULTIPLAYER_SCALING = builder
+                .comment("Dynamically scale event frequencies based on player count in multiplayer. When enabled, the frequency of per-player events will be reduced as more players join to prevent event overload.")
+                .define("dynamicMultiplayerScaling", true);
+        
+        MULTIPLAYER_SCALING_FACTOR = builder
+                .comment("Controls how aggressively the event frequency scales down with more players. Lower values = more aggressive scaling (0.5-1.0)")
+                .defineInRange("multiplayerScalingFactor", 0.7D, 0.5D, 1.0D);
+        
+        GLOBAL_EVENT_COOLDOWN = builder
+                .comment("Minimum time in seconds between horror events for a single player. Prevents event spam.")
+                .defineInRange("globalEventCooldown", 60, 0, 600);
+        
+        MINIMUM_EVENTS_PER_STAGE = builder
+                .comment("Minimum number of horror events a player should experience during each stage before progression. Set to 0 to disable.")
+                .defineInRange("minimumEventsPerStage", 3, 0, 30);
         
         // Configuration for community-inspired entities
         ENABLE_COMMUNITY_ENTITIES = builder

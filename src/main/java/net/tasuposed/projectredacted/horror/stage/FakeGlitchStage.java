@@ -54,14 +54,14 @@ public class FakeGlitchStage implements HorrorStage {
         int randomValue = random.nextInt(100);
         int choice;
         
-        if (randomValue < 35) {
-            // 35% chance for fake crash screen
+        if (randomValue < 20) {
+            // 20% chance for fake crash screen (reduced from 35%)
             choice = 0;
-        } else if (randomValue < 70) {
-            // 35% chance for Protocol_37 sighting with glitch effects
+        } else if (randomValue < 65) {
+            // 45% chance for Protocol_37 sighting with glitch effects (increased from 35%)
             choice = 1;
         } else if (randomValue < 85) {
-            // 15% chance for severe texture corruption
+            // 20% chance for severe texture corruption (increased from 15%)
             choice = 2;
         } else {
             // 15% chance for fake game freeze

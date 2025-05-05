@@ -20,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 import net.tasuposed.projectredacted.config.HorrorConfig;
 import net.tasuposed.projectredacted.entity.EntityRegistry;
 import net.tasuposed.projectredacted.entity.Iteration;
+import net.tasuposed.projectredacted.entity.MiningEntity;
 import net.tasuposed.projectredacted.entity.Protocol_37;
 import net.tasuposed.projectredacted.network.NetworkHandler;
 import net.tasuposed.projectredacted.network.packets.GlitchEntityPacket;
@@ -56,14 +57,17 @@ public class EntityEvent {
         
         // In a real implementation, you'd spawn a custom entity here
         // For now, we'll just send a glitch entity packet to make an existing entity appear glitched
-        if (level.getEntitiesOfClass(Monster.class, player.getBoundingBox().inflate(20.0)).size() > 0) {
+        List<Monster> nearbyMonsters = level.getEntitiesOfClass(Monster.class, player.getBoundingBox().inflate(20.0));
+        if (nearbyMonsters != null && !nearbyMonsters.isEmpty()) {
             // Find the nearest monster to glitch
-            Monster entity = level.getEntitiesOfClass(Monster.class, 
-                    player.getBoundingBox().inflate(20.0)).get(0);
+            Monster entity = nearbyMonsters.get(0);
             
             // Send packet to triggering player and nearby players
             applyEffectToPlayerAndNearby(player, 
                 p -> NetworkHandler.sendToPlayer(new GlitchEntityPacket(entity.getId()), p));
+        } else {
+            // No monsters found, log this event
+            LOGGER.debug("No monsters found for shadow figure effect for player {}", player.getName().getString());
         }
     }
     
@@ -71,11 +75,6 @@ public class EntityEvent {
      * Spawn a glimpse of Iteration entity that quickly disappears
      */
     public void spawnIterationGlimpse(ServerPlayer player) {
-        // Send a cryptic message to triggering player and nearby players
-        sendMessageToPlayerAndNearby(player, 
-                "§4§oIteration §4§odetected", 
-                "§4§oStrange presence detected");
-        
         // Spawn a temporary Iteration that will despawn quickly
         ServerLevel level = player.serverLevel();
         
@@ -237,19 +236,6 @@ public class EntityEvent {
         
         if (entity != null) {
             LOGGER.info("Successfully spawned Protocol_37 at {}", spawnPos);
-            
-            // Optional cryptic message
-            if (sendMessage && random.nextFloat() < 0.3f) {
-                String[] messages = {
-                    "§8§oSomething shifts in the corner of your vision...",
-                    "§8§oA chill runs down your spine...",
-                    "§8§oYou feel watched...",
-                    "§8§oA presence lingers nearby...",
-                    "§8§o§kT̷h̵e̵ ̷v̶o̸i̸d̷§r §8§owatches..."
-                };
-                
-                player.sendSystemMessage(Component.literal(messages[random.nextInt(messages.length)]));
-            }
         } else {
             LOGGER.error("Failed to spawn Protocol_37 entity at {}", spawnPos);
         }
@@ -260,22 +246,12 @@ public class EntityEvent {
      * This version is more intimidating and is part of the attack sequence
      */
     public void spawnHostileIteration(ServerPlayer player, Vec3 spawnPos) {
-        // Create intimidating messages for player and nearby players - more subtle now
-        if (random.nextFloat() < 0.5f) { // 50% chance to not show message at all
-            sendMessageToPlayerAndNearby(player,
-                    "§4§o§kX̶̖̥̤͇̃̏̉̃X̸̩̘͛̓̅͝X̵̨̡̣͈̯̾̓͗͝X̵̛̹͖̉̾͂ͅẊ̶̠̭̗͔̝̔̀̔̽X̶̰͚̺̋̾̕͠X̷̼͆̃X̴̜̪̓̌̊̒X̵̲̩̘̜̻̔͐̚X̴̨̠̱̘͑ͅX̶̜̪̆͂̊͘̚§r",
-                    "§4§osomething hostile is hunting...");
-        }
-        
         // Spawn the entity at the specified position
         ServerLevel level = player.serverLevel();
         
         // Create the entity with custom attributes
         Iteration entity = new Iteration(EntityRegistry.ITERATION.get(), level);
         entity.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
-        
-        // Set a custom name to make it more intimidating
-        entity.setCustomName(Component.literal("§4§lH̵̢̖̯̞̬̠̣̲̩̠̲̪̠̫̮͇̗̮̗̒̿́͗̄̑̆͒̕͝ų̶̢̤̲̲̼̳̪͚͎̜̖̼̟͙̮͙͚̗̺̓̀͊́̔̾̌̓͋̇̂̕̕͠n̴̨̨̛͉̙̮̠̤̯̦͕̬̬͈̬̮̫̫̊̂͛͂̋̋̀̄͌̊̾͌̆̿̈͐͑̚̚͜͝͝t̶̢̧̫̳̦̤̫̼͔̰̮̞̼̂̾͂̄̄̽̈͆̔̍́̍̓̑̂̄̿͝e̵̢̢̧̛̜̙̥̝̙̭̗̤̺̙̮͖͉̻͍̯̤̟̾̉͒̒̅̄͜r̵̢̧̛̞̠̞̜͓̗̤̖̹̯͚̰͔̺͐̈́̽̂̈͑̈́̋͒͊̈́̋͂͐̄̕̕͜͜͠"));
         
         // Set the player as the target
         entity.setTarget(player);
@@ -383,7 +359,7 @@ public class EntityEvent {
     public void spawnDistantProtocol37(ServerPlayer player) {
         // Use the customizable method with standard parameters for the Obvious stage
         // Reduced distance for better visibility in caves
-        spawnCustomProtocol37(player, 12.0, 0, 0.4f, true);
+        spawnCustomProtocol37(player, 12.0, 0, 0.4f, false);
     }
     
     /**
@@ -414,5 +390,144 @@ public class EntityEvent {
                 }
             }
         }
+    }
+    
+    /**
+     * Check if a player is underground (below sea level and has blocks above)
+     */
+    public boolean isPlayerUnderground(ServerPlayer player) {
+        ServerLevel level = player.serverLevel();
+        BlockPos pos = player.blockPosition();
+        
+        // Check if player is below sea level (Y < 63 in most Minecraft worlds)
+        boolean belowSeaLevel = pos.getY() < 63;
+        
+        // Check if there are solid blocks above the player (cave detection)
+        boolean hasCeiling = false;
+        for (int y = 1; y <= 20; y++) {
+            BlockPos checkPos = pos.above(y);
+            if (level.getBlockState(checkPos).isSolid()) {
+                hasCeiling = true;
+                break;
+            }
+        }
+        
+        // Player is considered underground if below sea level and has a ceiling
+        return belowSeaLevel && hasCeiling;
+    }
+    
+    /**
+     * Get the spawn chance multiplier based on player's environment
+     * Returns higher values for underground environments
+     */
+    public float getEnvironmentSpawnMultiplier(ServerPlayer player) {
+        // Base multiplier
+        float multiplier = 1.0f;
+        
+        // Check if player is underground
+        if (isPlayerUnderground(player)) {
+            // Significantly increase spawn chances underground
+            multiplier *= 2.5f;
+            
+            // Further increase if player is deep underground
+            if (player.blockPosition().getY() < 40) {
+                multiplier *= 1.5f;
+            }
+        }
+        
+        return multiplier;
+    }
+    
+    /**
+     * Spawn a MiningEntity at an appropriate distance from the player (8-16 blocks away)
+     * This creates an entity that will follow the player while breaking blocks
+     * 
+     * @param player The player to spawn the entity for
+     * @return The spawned entity, or null if spawning failed
+     */
+    public MiningEntity spawnMiningEntity(ServerPlayer player) {
+        ServerLevel level = player.serverLevel();
+        
+        // Try to find a suitable spawn position
+        // We want the entity to be 8-16 blocks away from the player
+        Vec3 spawnPos = null;
+        boolean foundPosition = false;
+        BlockPos playerPos = player.blockPosition();
+        
+        // First try directly behind the player
+        Vec3 behindPlayer = player.position().subtract(
+                player.getViewVector(1.0F).normalize().scale(12)); // 12 blocks behind
+        
+        // Check if this position is valid
+        BlockPos behindPos = new BlockPos((int)behindPlayer.x, (int)behindPlayer.y, (int)behindPlayer.z);
+        if (isValidSpawnPosition(level, behindPos)) {
+            spawnPos = new Vec3(behindPos.getX() + 0.5, behindPos.getY(), behindPos.getZ() + 0.5);
+            foundPosition = true;
+            LOGGER.debug("Found valid MiningEntity spawn position behind player at {}", behindPos);
+        }
+        
+        // If behind position didn't work, try random positions
+        if (!foundPosition) {
+            // Try several random positions at different angles
+            for (int attempt = 0; attempt < 10; attempt++) {
+                // Random angle around the player
+                double angle = random.nextDouble() * Math.PI * 2;
+                // Distance between 8-16 blocks
+                double distance = 8 + random.nextDouble() * 8;
+                
+                // Calculate position
+                double x = player.getX() + Math.sin(angle) * distance;
+                double z = player.getZ() + Math.cos(angle) * distance;
+                
+                // Find a suitable Y position (on solid ground)
+                BlockPos basePos = new BlockPos((int)x, playerPos.getY(), (int)z);
+                
+                // Check positions at player height and below
+                for (int yOffset = 0; yOffset >= -5; yOffset--) {
+                    BlockPos checkPos = basePos.offset(0, yOffset, 0);
+                    
+                    if (isValidSpawnPosition(level, checkPos)) {
+                        spawnPos = new Vec3(checkPos.getX() + 0.5, checkPos.getY(), checkPos.getZ() + 0.5);
+                        foundPosition = true;
+                        LOGGER.debug("Found valid MiningEntity spawn position at {} (attempt {})", checkPos, attempt + 1);
+                        break;
+                    }
+                }
+                
+                if (foundPosition) break;
+            }
+        }
+        
+        // If we couldn't find a valid position, log and return null
+        if (!foundPosition || spawnPos == null) {
+            LOGGER.warn("Could not find valid spawn position for MiningEntity near player {}", player.getName().getString());
+            return null;
+        }
+        
+        // Spawn the entity
+        MiningEntity entity = spawnTemporaryEntity(level, EntityRegistry.MINING_ENTITY.get(), spawnPos, 0);
+        
+        if (entity != null) {
+            LOGGER.info("Successfully spawned MiningEntity at {} at distance {}", 
+                    spawnPos, player.position().distanceTo(spawnPos));
+            
+            // Play a distant mining sound as a warning
+            level.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
+                    SoundEvents.STONE_BREAK, SoundSource.BLOCKS,
+                    0.7F, 0.8F + random.nextFloat() * 0.3F);
+        } else {
+            LOGGER.error("Failed to spawn MiningEntity at {}", spawnPos);
+        }
+        
+        return entity;
+    }
+    
+    /**
+     * Helper method to check if a position is valid for spawning a MiningEntity
+     */
+    private boolean isValidSpawnPosition(ServerLevel level, BlockPos pos) {
+        return level.getBlockState(pos.below()).isSolid() && // Solid block below
+               level.getBlockState(pos).isAir() &&          // Air at position
+               level.getBlockState(pos.above()).isAir();    // Air above position
     }
 } 

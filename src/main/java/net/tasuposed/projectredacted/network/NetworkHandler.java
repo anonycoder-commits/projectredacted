@@ -77,8 +77,13 @@ public class NetworkHandler {
      * Send a packet to a specific player
      */
     public static <T> void sendToPlayer(T packet, ServerPlayer player) {
+        if (packet == null || player == null) {
+            System.err.println("[NetworkHandler] Cannot send null packet or to null player");
+            return;
+        }
+        
         try {
-            CHANNEL.sendTo(packet, player.connection.getConnection(), NetworkDirection.PLAY_TO_CLIENT);
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
             System.out.println("[NetworkHandler] Successfully sent packet of type " + packet.getClass().getSimpleName() + " to player " + player.getName().getString());
         } catch (Exception e) {
             System.err.println("[NetworkHandler] Error sending packet of type " + packet.getClass().getSimpleName() + " to player " + player.getName().getString() + ": " + e.getMessage());
@@ -90,20 +95,50 @@ public class NetworkHandler {
      * Send a packet to all players
      */
     public static void sendToAll(Object packet) {
-        CHANNEL.send(PacketDistributor.ALL.noArg(), packet);
+        if (packet == null) {
+            System.err.println("[NetworkHandler] Cannot send null packet to all players");
+            return;
+        }
+        
+        try {
+            CHANNEL.send(PacketDistributor.ALL.noArg(), packet);
+        } catch (Exception e) {
+            System.err.println("[NetworkHandler] Error sending packet to all players: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     /**
      * Send a packet to the server
      */
     public static void sendToServer(Object packet) {
-        CHANNEL.sendToServer(packet);
+        if (packet == null) {
+            System.err.println("[NetworkHandler] Cannot send null packet to server");
+            return;
+        }
+        
+        try {
+            CHANNEL.sendToServer(packet);
+        } catch (Exception e) {
+            System.err.println("[NetworkHandler] Error sending packet to server: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     /**
      * Send a packet to all players in a certain dimension
      */
     public static void sendToDimension(Object packet, ResourceKey<Level> dimensionKey) {
-        CHANNEL.send(PacketDistributor.DIMENSION.with(() -> dimensionKey), packet);
+        if (packet == null || dimensionKey == null) {
+            System.err.println("[NetworkHandler] Cannot send null packet or to null dimension");
+            return;
+        }
+        
+        try {
+            CHANNEL.send(PacketDistributor.DIMENSION.with(() -> dimensionKey), packet);
+        } catch (Exception e) {
+            System.err.println("[NetworkHandler] Error sending packet to dimension: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 } 

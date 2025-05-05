@@ -20,5 +20,51 @@
     "sounds": [
       "projectredacted:entity/growl"
     ]
+  },
+  "entity.iteration.ambient": {
+    "subtitle": "Iteration emits a strange signal",
+    "category": "hostile",
+    "sounds": [
+      {"name": "projectredacted:entity/iteration/ambient1", "stream": true},
+      {"name": "projectredacted:entity/iteration/ambient2", "stream": true},
+      {"name": "projectredacted:entity/iteration/ambient3", "stream": true}
+    ]
+  },
+  "entity.iteration.teleport": {
+    "subtitle": "Reality fractures as Iteration moves",
+    "category": "hostile",
+    "sounds": [
+      {"name": "projectredacted:entity/iteration/teleport", "stream": false}
+    ]
+  },
+  "entity.iteration.attack": {
+    "subtitle": "Iteration corrupts your world",
+    "category": "hostile",
+    "sounds": [
+      {"name": "projectredacted:entity/iteration/attack1", "stream": false},
+      {"name": "projectredacted:entity/iteration/attack2", "stream": false}
+    ]
+  },
+  "music.distant": {
+    "subtitle": "A distant melody plays",
+    "category": "music",
+    "sounds": [
+      {"name": "projectredacted:music/distant", "stream": true, "attenuation_distance": 24}
+    ]
+  },
+  "ambient.reality_warp": {
+    "subtitle": "Reality seems to bend",
+    "category": "ambient",
+    "sounds": [
+      {"name": "projectredacted:ambient/reality_warp", "stream": true}
+    ]
+  },
+  "entity.scream": {
+    "subtitle": "A horrifying scream",
+    "category": "hostile",
+    "sounds": [
+      {"name": "projectredacted:entity/scream1", "stream": true},
+      {"name": "projectredacted:entity/scream2", "stream": true}
+    ]
   }
 } 

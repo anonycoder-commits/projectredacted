@@ -18,7 +18,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -32,6 +31,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.tasuposed.projectredacted.world.DimensionRegistry;
 
 /**
  * Handles the spawning of creepy structures in the world.
@@ -107,8 +107,8 @@ public class HorrorStructureSpawner {
         ServerPlayer player = (ServerPlayer) event.player;
         ServerLevel level = player.serverLevel();
         
-        // Only spawn in the overworld
-        if (level.dimension() != Level.OVERWORLD) {
+        // Only spawn in the overworld, never in the void or other dimensions
+        if (level.dimension() != Level.OVERWORLD || level.dimension() == DimensionRegistry.THE_VOID) {
             return;
         }
         

@@ -187,9 +187,10 @@ public class ScreenEffectHandler {
         Minecraft minecraft = Minecraft.getInstance();
         float time = minecraft.level.getGameTime() % 1000000;
         
-        // Create wave pattern
+        // Enhance distortion with more layers for better visual impact
+        // First layer: horizontal wave pattern
         for (int i = 0; i < height; i += 3) {
-            float waveAmplitude = 5.0f * intensity;
+            float waveAmplitude = 7.0f * intensity;
             float waveOffset = (float) Math.sin((time / 10.0f) + (i / 20.0f)) * waveAmplitude;
             
             int lineColor = 0x22FFFFFF; // Semi-transparent white
@@ -197,55 +198,154 @@ public class ScreenEffectHandler {
             // Draw horizontal wavy lines
             graphics.fill((int) waveOffset, i, width + (int) waveOffset, i + 1, lineColor);
         }
+        
+        // Second layer: vertical distortion (only with higher intensity)
+        if (intensity > 0.4f) {
+            float verticalIntensity = (intensity - 0.4f) * 1.67f; // Scale 0.4-1.0 to 0.0-1.0
+            
+            for (int i = 0; i < width; i += 5) {
+                float waveAmplitude = 6.0f * verticalIntensity;
+                float waveOffset = (float) Math.sin((time / 12.0f) + (i / 25.0f)) * waveAmplitude;
+                
+                int lineColor = 0x18FFFFFF; // More subtle vertical effect
+                
+                // Draw vertical wavy lines
+                graphics.fill(i, (int) waveOffset, i + 1, height + (int) waveOffset, lineColor);
+            }
+        }
+        
+        // Third layer: RGB shift effect (for high intensity)
+        if (intensity > 0.7f) {
+            float rgbIntensity = (intensity - 0.7f) * 3.33f; // Scale 0.7-1.0 to 0.0-1.0
+            int rgbShift = (int)(4.0f * rgbIntensity);
+            
+            if (rgbShift > 0) {
+                // Add subtle RGB shift overlay
+                int redOverlay = (int)(50 * rgbIntensity) << 24 | 0x00FF0000;
+                int greenOverlay = (int)(50 * rgbIntensity) << 24 | 0x0000FF00;
+                int blueOverlay = (int)(50 * rgbIntensity) << 24 | 0x000000FF;
+                
+                // Red shifted left
+                graphics.fill(0, 0, width, height, redOverlay);
+                
+                // Green stays centered
+                graphics.fill(rgbShift, 0, width + rgbShift, height, greenOverlay);
+                
+                // Blue shifted right
+                graphics.fill(rgbShift * 2, 0, width + (rgbShift * 2), height, blueOverlay);
+            }
+        }
     }
     
     private void renderCorruptEffect(GuiGraphics graphics, float intensity, int width, int height) {
-        // Render corrupt/glitched graphics
+        // Corruption effect - create data corruption appearance
         Minecraft minecraft = Minecraft.getInstance();
         float time = minecraft.level.getGameTime() % 1000000;
         
-        // Draw glitch blocks
-        int numBlocks = (int)(20 * intensity);
+        // First layer: Block corruption
+        int blockSize = 8;
+        int numBlocks = (int)(50 * intensity);
+        
         for (int i = 0; i < numBlocks; i++) {
-            int blockWidth = (int)(Math.random() * width / 5);
-            int blockHeight = 10 + (int)(Math.random() * 30);
-            int blockX = (int)(Math.random() * width);
-            int blockY = (int)(Math.random() * height);
+            // Compute positions based on time for movement
+            int x = (int)((Math.sin(time / 20.0f + i) + 1) * width / 2);
+            int y = (int)((Math.cos(time / 30.0f + i * 2) + 1) * height / 2);
             
-            // Random color with transparency
-            int r = (int)(Math.random() * 255);
-            int g = (int)(Math.random() * 255);
-            int b = (int)(Math.random() * 255);
-            int a = (int)(128 * intensity);
+            // Randomize block appearance
+            int blockW = blockSize + (int)(Math.random() * blockSize * 2);
+            int blockH = blockSize + (int)(Math.random() * blockSize);
             
-            int blockColor = (a << 24) | (r << 16) | (g << 8) | b;
+            // Calculate color - mix of black, white and glitch colors
+            int colorChoice = (int)(Math.random() * 5);
+            int blockColor;
             
-            // Draw the glitch block
-            graphics.fill(blockX, blockY, blockX + blockWidth, blockY + blockHeight, blockColor);
+            switch (colorChoice) {
+                case 0:
+                    blockColor = 0xFF000000; // Black
+                    break;
+                case 1:
+                    blockColor = 0xFFFFFFFF; // White
+                    break;
+                case 2:
+                    blockColor = 0xFF0000FF; // Blue
+                    break;
+                case 3:
+                    blockColor = 0xFF00FF00; // Green
+                    break;
+                default:
+                    blockColor = 0xFFFF0000; // Red
+                    break;
+            }
+            
+            // Apply alpha based on intensity
+            blockColor = ((int)(200 * intensity) << 24) | (blockColor & 0x00FFFFFF);
+            
+            // Draw corrupted block
+            graphics.fill(x, y, x + blockW, y + blockH, blockColor);
         }
         
-        // Draw scanlines
-        int scanlineSpacing = 4;
-        int scanlineAlpha = (int)(100 * intensity);
-        int scanlineColor = (scanlineAlpha << 24) | 0xFFFFFF;
+        // Second layer: Scan lines effect (more visible at higher intensities)
+        if (intensity > 0.4f) {
+            int scanLineSpacing = 4;
+            int scanLineColor = ((int)(100 * intensity) << 24) | 0x000000;
+            
+            for (int y = 0; y < height; y += scanLineSpacing) {
+                graphics.fill(0, y, width, y + 1, scanLineColor);
+            }
+        }
         
-        for (int y = 0; y < height; y += scanlineSpacing) {
-            graphics.fill(0, y, width, y + 1, scanlineColor);
+        // Third layer: Text corruption (for high intensity)
+        if (intensity > 0.6f && Math.random() < 0.3) {
+            String[] corruptText = {
+                "ERROR", "CORRUPT", "DELETED", "FAULT", "BREACH",
+                "01101", "NULL", "VOID", "WATCH", "SEE YOU"
+            };
+            
+            int textCount = (int)(5 * intensity);
+            for (int i = 0; i < textCount; i++) {
+                int x = (int)(Math.random() * width);
+                int y = (int)(Math.random() * height);
+                String text = corruptText[(int)(Math.random() * corruptText.length)];
+                
+                // Random color
+                int textColor = (int)(Math.random() * 0xFFFFFF);
+                int alpha = (int)(255 * intensity);
+                int finalColor = (alpha << 24) | textColor;
+                
+                // Draw the text
+                graphics.drawString(minecraft.font, text, x, y, finalColor);
+            }
         }
     }
     
     private void renderInvertEffect(GuiGraphics graphics, float intensity, int width, int height) {
-        // Invert screen colors
+        // Create a true inversion effect
         Minecraft minecraft = Minecraft.getInstance();
         
-        // Apply a simple screen-wide inversion effect with variable transparency
-        int alpha = (int)(200 * intensity);
-        int invertColor = (alpha << 24) | 0xFFFFFF; // White with transparency
+        // Apply a full screen color inversion with appropriate transparency
+        int alpha = (int)(255 * intensity); // Full opacity for better inversion
         
-        // Draw full-screen overlay with blend mode
-        graphics.fill(0, 0, width, height, invertColor);
+        // Use a white overlay with specific RenderSystem settings for inversion effect
+        int invertColor = (alpha << 24) | 0xFFFFFF; // White with alpha channel
         
-        // Add additional visual noise for more disturbing effect
+        // Set up the blend function for a difference-like effect
+        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, intensity);
+        
+        // This blend function helps create an inversion-like effect
+        com.mojang.blaze3d.systems.RenderSystem.blendFunc(
+            com.mojang.blaze3d.platform.GlStateManager.SourceFactor.ONE_MINUS_DST_COLOR,
+            com.mojang.blaze3d.platform.GlStateManager.DestFactor.ONE_MINUS_SRC_COLOR
+        );
+        
+        // Draw full-screen overlay with our special blend function to invert colors
+        graphics.fill(0, 0, width, height, 0xFFFFFFFF);
+        
+        // Restore normal blend mode
+        com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        
+        // Add additional visual noise for more disturbing effect if intensity is high
         if (intensity > 0.5f) {
             int noiseCount = (int)(200 * (intensity - 0.5f) * 2.0f);
             

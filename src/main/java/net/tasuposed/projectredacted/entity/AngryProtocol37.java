@@ -66,7 +66,8 @@ public class AngryProtocol37 extends Monster {
                 .add(Attributes.MAX_HEALTH, 20.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.7D) // Much faster than Protocol_37 for intimidation
                 .add(Attributes.ATTACK_DAMAGE, 3.0D)
-                .add(Attributes.FOLLOW_RANGE, 64.0D);
+                .add(Attributes.FOLLOW_RANGE, 64.0D)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D); // Added complete knockback immunity
     }
     
     @Override
